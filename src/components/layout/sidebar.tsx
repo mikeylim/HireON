@@ -1,0 +1,111 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import {
+  LayoutDashboard,
+  Briefcase,
+  Bookmark,
+  CheckCircle2,
+  CalendarClock,
+  XCircle,
+  Settings,
+  Search,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PlusCircle,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useSidebar } from "./sidebar-context";
+
+const menuItems = [
+  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { label: "All Jobs", href: "/dashboard/jobs", icon: Briefcase },
+  { label: "Add Job", href: "/dashboard/add", icon: PlusCircle },
+  { label: "Saved", href: "/dashboard/saved", icon: Bookmark },
+  { label: "Applied", href: "/dashboard/applied", icon: CheckCircle2 },
+  { label: "Interviews", href: "/dashboard/interviews", icon: CalendarClock },
+  { label: "Archived", href: "/dashboard/archived", icon: XCircle },
+  { label: "Settings", href: "/dashboard/settings", icon: Settings },
+];
+
+export function Sidebar() {
+  const pathname = usePathname();
+  const { collapsed, toggle } = useSidebar();
+
+  return (
+    <aside
+      className={cn(
+        "fixed left-0 top-0 z-40 flex h-screen flex-col border-r border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] transition-all duration-200",
+        collapsed ? "w-16" : "w-64"
+      )}
+    >
+      {/* Logo + toggle button */}
+      <div className="flex h-16 items-center justify-between border-b border-[var(--sidebar-border)] px-3">
+        <div className={cn("flex items-center gap-2", collapsed && "justify-center w-full")}>
+          <Search className="h-6 w-6 shrink-0 text-[var(--primary)]" />
+          {!collapsed && (
+            <span className="text-xl font-bold">
+              Hire<span className="text-[var(--primary)]">ON</span>
+            </span>
+          )}
+        </div>
+        {!collapsed && (
+          <button
+            onClick={toggle}
+            className="rounded-lg p-1.5 text-[var(--muted)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
+          >
+            <PanelLeftClose className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
+      {/* Expand button when collapsed — sits right below the logo */}
+      {collapsed && (
+        <button
+          onClick={toggle}
+          className="mx-auto mt-3 rounded-lg p-1.5 text-[var(--muted)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
+        >
+          <PanelLeftOpen className="h-5 w-5" />
+        </button>
+      )}
+
+      {/* Navigation links */}
+      <nav className={cn("flex-1 space-y-1 py-4", collapsed ? "px-2" : "px-3")}>
+        {menuItems.map((item) => {
+          const isActive =
+            item.href === "/dashboard"
+              ? pathname === "/dashboard"
+              : pathname.startsWith(item.href);
+
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              title={collapsed ? item.label : undefined}
+              className={cn(
+                "flex items-center rounded-lg text-sm font-medium transition-colors",
+                collapsed
+                  ? "justify-center px-0 py-2.5"
+                  : "gap-3 px-3 py-2.5",
+                isActive
+                  ? "bg-[var(--primary)] text-white"
+                  : "text-[var(--muted)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
+              )}
+            >
+              <item.icon className="h-5 w-5 shrink-0" />
+              {!collapsed && item.label}
+            </Link>
+          );
+        })}
+      </nav>
+
+      {/* Footer */}
+      {!collapsed && (
+        <div className="border-t border-[var(--sidebar-border)] p-4 text-xs text-[var(--muted)]">
+          HireON v0.1.0
+        </div>
+      )}
+    </aside>
+  );
+}

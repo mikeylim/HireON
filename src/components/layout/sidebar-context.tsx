@@ -1,0 +1,27 @@
+"use client";
+
+import { createContext, useContext, useState } from "react";
+
+// Shared state for sidebar collapse — used by the layout, sidebar, and topbar
+interface SidebarContextType {
+  collapsed: boolean;
+  toggle: () => void;
+}
+
+const SidebarContext = createContext<SidebarContextType>({
+  collapsed: false,
+  toggle: () => {},
+});
+
+export function SidebarProvider({ children }: { children: React.ReactNode }) {
+  const [collapsed, setCollapsed] = useState(false);
+  return (
+    <SidebarContext.Provider value={{ collapsed, toggle: () => setCollapsed((c) => !c) }}>
+      {children}
+    </SidebarContext.Provider>
+  );
+}
+
+export function useSidebar() {
+  return useContext(SidebarContext);
+}
