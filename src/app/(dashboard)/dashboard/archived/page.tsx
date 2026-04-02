@@ -1,23 +1,24 @@
-import { XCircle } from "lucide-react";
+"use client";
 
-// Archived/rejected — jobs you're done with (rejected, expired, not interested)
+import { XCircle } from "lucide-react";
+import { JobList } from "@/components/jobs/job-list";
+
 export default function ArchivedPage() {
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6 overflow-hidden">
       <div>
         <h1 className="text-2xl font-bold">Archived</h1>
         <p className="text-sm text-[var(--muted)]">
-          Rejected, expired, or dismissed job postings.
+          Rejected, expired, or dismissed jobs. You can restore them from the detail view.
         </p>
       </div>
 
-      <div className="rounded-xl border border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] p-8 text-center">
-        <XCircle className="mx-auto h-12 w-12 text-[var(--muted)]" />
-        <h3 className="mt-4 text-lg font-semibold">Nothing archived</h3>
-        <p className="mt-1 text-sm text-[var(--muted)]">
-          Jobs you dismiss or that get rejected will end up here.
-        </p>
-      </div>
+      <JobList
+        status={["archived", "rejected"]}
+        emptyIcon={<XCircle className="mx-auto h-12 w-12 text-[var(--muted)]" />}
+        emptyTitle="Nothing archived"
+        emptyDescription="Jobs you dismiss or that get rejected will end up here."
+      />
     </div>
   );
 }

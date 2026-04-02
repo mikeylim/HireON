@@ -37,4 +37,29 @@ export interface Job {
   scraped_at: string;
   created_at: string;
   updated_at: string;
+
+  // Applied tracking
+  applied_method: string | null;
+  applied_resume_version: string | null;
+  applied_cover_letter: boolean;
+  applied_referral: string | null;
+  applied_follow_up_date: string | null;
+
+  // Interview tracking
+  interview_date: string | null;
+  interview_type: string | null;
+  interview_location: string | null;
+  interview_contact: string | null;
+  interview_prep: string | null;
+
+  // Offer tracking
+  offer_amount: number | null;
+  offer_date: string | null;
+  offer_deadline: string | null;
+
+  // Rejection/archive tracking
+  applied_date: string | null;
+  rejected_date: string | null;
+  rejection_reason: string | null;
+  archived_date: string | null;
 }

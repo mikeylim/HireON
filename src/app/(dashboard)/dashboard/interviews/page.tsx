@@ -1,23 +1,24 @@
-import { CalendarClock } from "lucide-react";
+"use client";
 
-// Interview tracking — jobs where you got a callback
+import { CalendarClock } from "lucide-react";
+import { JobList } from "@/components/jobs/job-list";
+
 export default function InterviewsPage() {
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6 overflow-hidden">
       <div>
         <h1 className="text-2xl font-bold">Interviews</h1>
         <p className="text-sm text-[var(--muted)]">
-          Track upcoming and past interviews.
+          Jobs where you have an interview scheduled or completed. Use notes for dates and prep.
         </p>
       </div>
 
-      <div className="rounded-xl border border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] p-8 text-center">
-        <CalendarClock className="mx-auto h-12 w-12 text-[var(--muted)]" />
-        <h3 className="mt-4 text-lg font-semibold">No interviews scheduled</h3>
-        <p className="mt-1 text-sm text-[var(--muted)]">
-          When you land interviews, move jobs here to keep track of dates and notes.
-        </p>
-      </div>
+      <JobList
+        status="interview"
+        emptyIcon={<CalendarClock className="mx-auto h-12 w-12 text-[var(--muted)]" />}
+        emptyTitle="No interviews scheduled"
+        emptyDescription="When you land interviews, move jobs here from the detail view."
+      />
     </div>
   );
 }

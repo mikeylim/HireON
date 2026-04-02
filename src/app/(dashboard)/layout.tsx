@@ -3,6 +3,7 @@
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { SidebarProvider, useSidebar } from "@/components/layout/sidebar-context";
+import { PreviewProvider } from "@/components/jobs/preview-context";
 import { cn } from "@/lib/utils";
 
 function DashboardShell({ children }: { children: React.ReactNode }) {
@@ -31,7 +32,9 @@ export default function DashboardLayout({
 }) {
   return (
     <SidebarProvider>
-      <DashboardShell>{children}</DashboardShell>
+      <PreviewProvider>
+        <DashboardShell>{children}</DashboardShell>
+      </PreviewProvider>
     </SidebarProvider>
   );
 }

@@ -14,6 +14,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   PlusCircle,
+  Trophy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "./sidebar-context";
@@ -25,6 +26,7 @@ const menuItems = [
   { label: "Saved", href: "/dashboard/saved", icon: Bookmark },
   { label: "Applied", href: "/dashboard/applied", icon: CheckCircle2 },
   { label: "Interviews", href: "/dashboard/interviews", icon: CalendarClock },
+  { label: "Offers", href: "/dashboard/offers", icon: Trophy },
   { label: "Archived", href: "/dashboard/archived", icon: XCircle },
   { label: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
