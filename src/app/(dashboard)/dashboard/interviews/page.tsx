@@ -15,6 +15,7 @@ export default function InterviewsPage() {
 
       <JobList
         status="interview"
+        exportFilename="hireon-interviews"
         emptyIcon={<CalendarClock className="mx-auto h-12 w-12 text-[var(--muted)]" />}
         emptyTitle="No interviews scheduled"
         emptyDescription="When you land interviews, move jobs here from the detail view."

@@ -12,6 +12,7 @@ import {
   XCircle,
   Archive,
   Trash2,
+  Pencil,
 } from "lucide-react";
 import type { Job, JobStatus } from "@/lib/types/job";
 import { titleCase } from "@/lib/utils";
@@ -54,6 +55,15 @@ export function JobDetailModal({
   onUpdate,
   onDelete,
 }: JobDetailModalProps) {
+  // Core job fields — editable
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState(job.title ?? "");
+  const [company, setCompany] = useState(job.company ?? "");
+  const [location, setLocation] = useState(job.location ?? "");
+  const [jobUrl, setJobUrl] = useState(job.url ?? "");
+  const [description, setDescription] = useState(job.description ?? "");
+  const [deadline, setDeadline] = useState(job.deadline?.slice(0, 10) ?? "");
+
   // General fields
   const [notes, setNotes] = useState(job.notes ?? "");
 
@@ -97,6 +107,13 @@ export function JobDetailModal({
 
   // Sync local state when the job prop changes (e.g. after a status update)
   useEffect(() => {
+    setTitle(job.title ?? "");
+    setCompany(job.company ?? "");
+    setLocation(job.location ?? "");
+    setJobUrl(job.url ?? "");
+    setDescription(job.description ?? "");
+    setDeadline(job.deadline?.slice(0, 10) ?? "");
+    setEditing(false);
     setNotes(job.notes ?? "");
     setAppliedDate(job.applied_date?.slice(0, 10) ?? "");
     setAppliedMethod(job.applied_method ?? "");
@@ -159,6 +176,12 @@ export function JobDetailModal({
   // Save all editable fields at once
   async function handleSaveDetails() {
     const updates: Record<string, unknown> = {
+      title: title.trim(),
+      company: company.trim(),
+      location: location.trim(),
+      url: jobUrl.trim(),
+      description: description.trim(),
+      deadline: deadline || null,
       notes,
       applied_date: appliedDate || null,
       applied_method: appliedMethod || null,
@@ -199,6 +222,12 @@ export function JobDetailModal({
 
   // Check if any field has changed from the original job
   const hasChanges =
+    title !== (job.title ?? "") ||
+    company !== (job.company ?? "") ||
+    location !== (job.location ?? "") ||
+    jobUrl !== (job.url ?? "") ||
+    description !== (job.description ?? "") ||
+    deadline !== (job.deadline?.slice(0, 10) ?? "") ||
     notes !== (job.notes ?? "") ||
     appliedDate !== (job.applied_date?.slice(0, 10) ?? "") ||
     appliedMethod !== (job.applied_method ?? "") ||
@@ -228,12 +257,69 @@ export function JobDetailModal({
           <X className="h-5 w-5" />
         </button>
 
-        {/* Header */}
+        {/* Header — toggles between view and edit mode */}
         <div className="pr-10">
-          <h2 className="text-xl font-bold">{titleCase(job.title)}</h2>
-          <p className="mt-1 text-sm text-[var(--muted)]">
-            {job.company} · {job.location}
-          </p>
+          {editing ? (
+            <div className="space-y-2">
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className={`${inputClass} text-lg font-bold`}
+                placeholder="Job title"
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="text"
+                  value={company}
+                  onChange={(e) => setCompany(e.target.value)}
+                  className={inputClass}
+                  placeholder="Company"
+                />
+                <input
+                  type="text"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  className={inputClass}
+                  placeholder="Location"
+                />
+              </div>
+              <input
+                type="url"
+                value={jobUrl}
+                onChange={(e) => setJobUrl(e.target.value)}
+                className={inputClass}
+                placeholder="Job posting URL"
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className={labelClass}>Application Deadline</label>
+                  <input
+                    type="date"
+                    value={deadline}
+                    onChange={(e) => setDeadline(e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-start justify-between">
+              <div>
+                <h2 className="text-xl font-bold">{titleCase(title || job.title)}</h2>
+                <p className="mt-1 text-sm text-[var(--muted)]">
+                  {company || job.company} · {location || job.location}
+                </p>
+              </div>
+              <button
+                onClick={() => setEditing(true)}
+                className="rounded-lg p-1.5 text-[var(--muted)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
+                title="Edit job details"
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Metadata badges */}
@@ -273,23 +359,38 @@ export function JobDetailModal({
         </div>
 
         {/* Link to posting */}
-        <a
-          href={job.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-[var(--primary)] hover:underline"
-        >
-          View original posting <ExternalLink className="h-3.5 w-3.5" />
-        </a>
+        {!editing && (jobUrl || job.url) && (
+          <a
+            href={jobUrl || job.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-[var(--primary)] hover:underline"
+          >
+            View original posting <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+        )}
 
         {/* Description */}
-        {job.description && (
+        {editing ? (
           <div className="mt-4">
             <h3 className="text-sm font-semibold">Description</h3>
-            <p className="mt-1 text-sm leading-relaxed text-[var(--muted)]">
-              {job.description}
-            </p>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={4}
+              className={`mt-1 ${inputClass}`}
+              placeholder="Job description..."
+            />
           </div>
+        ) : (
+          (description || job.description) && (
+            <div className="mt-4">
+              <h3 className="text-sm font-semibold">Description</h3>
+              <p className="mt-1 text-sm leading-relaxed text-[var(--muted)]">
+                {description || job.description}
+              </p>
+            </div>
+          )
         )}
 
         {/* ── Status buttons ── */}

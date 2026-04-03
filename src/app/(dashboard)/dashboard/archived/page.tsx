@@ -15,6 +15,7 @@ export default function ArchivedPage() {
 
       <JobList
         status={["archived", "rejected"]}
+        exportFilename="hireon-archived"
         emptyIcon={<XCircle className="mx-auto h-12 w-12 text-[var(--muted)]" />}
         emptyTitle="Nothing archived"
         emptyDescription="Jobs you dismiss or that get rejected will end up here."

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Loader2, Zap } from "lucide-react";
+import { loadSettings } from "@/lib/settings";
 import type { PreviewJob } from "@/lib/types/preview";
 
 const ALL_SOURCES = [
@@ -24,6 +25,13 @@ export function ScrapeButton({ onResults }: ScrapeButtonProps) {
   const [sources, setSources] = useState<string[]>(
     ALL_SOURCES.map((s) => s.id)
   );
+
+  // Load defaults from settings on mount
+  useEffect(() => {
+    const settings = loadSettings();
+    if (settings.defaultKeywords) setKeywords(settings.defaultKeywords);
+    if (settings.defaultSources.length > 0) setSources(settings.defaultSources);
+  }, []);
 
   function toggleSource(id: string) {
     setSources((prev) =>
@@ -59,9 +67,10 @@ export function ScrapeButton({ onResults }: ScrapeButtonProps) {
       if (result.data && result.data.length > 0) {
         // Turn raw results into preview jobs with selection state
         const preview: PreviewJob[] = result.data.map(
-          (job: Omit<PreviewJob, "selected" | "score_reason">) => ({
+          (job: Omit<PreviewJob, "selected" | "score_reason" | "already_saved">) => ({
             ...job,
             selected: false,
+            already_saved: false,
             score_reason: undefined,
           })
         );

@@ -14,5 +14,6 @@ export interface PreviewJob {
   tags: string[];
   relevance_score: number | null;
   score_reason?: string;
-  selected: boolean; // whether the user has checked this for saving
+  selected: boolean;        // whether the user has checked this for saving
+  already_saved: boolean;    // true if this URL already exists in the database
 }

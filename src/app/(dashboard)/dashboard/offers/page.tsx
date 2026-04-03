@@ -15,6 +15,7 @@ export default function OffersPage() {
 
       <JobList
         status="offer"
+        exportFilename="hireon-offers"
         emptyIcon={<Trophy className="mx-auto h-12 w-12 text-[var(--muted)]" />}
         emptyTitle="No offers yet"
         emptyDescription="When you receive offers, move jobs here to track salary and deadlines."

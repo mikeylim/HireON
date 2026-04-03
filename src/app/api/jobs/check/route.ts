@@ -1,0 +1,27 @@
+import { NextRequest, NextResponse } from "next/server";
+import { supabase } from "@/lib/supabase/client";
+
+// POST /api/jobs/check
+// Body: { urls: string[] }
+// Returns which URLs already exist in the database
+export async function POST(req: NextRequest) {
+  try {
+    const { urls } = await req.json();
+
+    if (!urls || urls.length === 0) {
+      return NextResponse.json({ existing: [] });
+    }
+
+    const { data } = await supabase
+      .from("jobs")
+      .select("url")
+      .in("url", urls);
+
+    const existing = (data ?? []).map((row: { url: string }) => row.url);
+
+    return NextResponse.json({ existing });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return NextResponse.json({ existing: [], error: message }, { status: 500 });
+  }
+}

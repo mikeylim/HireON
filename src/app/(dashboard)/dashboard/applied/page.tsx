@@ -15,6 +15,7 @@ export default function AppliedJobsPage() {
 
       <JobList
         status="applied"
+        exportFilename="hireon-applied-jobs"
         emptyIcon={<CheckCircle2 className="mx-auto h-12 w-12 text-[var(--muted)]" />}
         emptyTitle="No applications yet"
         emptyDescription="Mark jobs as 'Applied' from the detail view to track them here."

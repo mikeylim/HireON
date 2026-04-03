@@ -5,21 +5,26 @@ import {
   ChevronLeft,
   ChevronRight,
   ArrowUpDown,
+  Send,
+  CalendarClock,
+  Archive,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { JobDetailModal } from "./job-detail-modal";
+import { ExportButton } from "./export-button";
 import type { Job, JobStatus } from "@/lib/types/job";
 import { titleCase } from "@/lib/utils";
 
 const JOBS_PER_PAGE = 15;
 
-type SortField = "scraped_at" | "relevance_score" | "salary_min" | "posted_at" | "title";
+type SortField = "scraped_at" | "relevance_score" | "salary_min" | "posted_at" | "deadline" | "title";
 
 interface JobListProps {
-  status: JobStatus | JobStatus[]; // filter by one or multiple statuses
+  status: JobStatus | JobStatus[];
   emptyIcon: React.ReactNode;
   emptyTitle: string;
   emptyDescription: string;
+  exportFilename?: string;
 }
 
 // Reusable job list with pagination, sorting, and click-to-open detail modal
@@ -28,6 +33,7 @@ export function JobList({
   emptyIcon,
   emptyTitle,
   emptyDescription,
+  exportFilename,
 }: JobListProps) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [total, setTotal] = useState(0);
@@ -119,10 +125,56 @@ export function JobList({
     setTotal((prev) => prev - 1);
   }
 
+  // Quick status change directly from the card — no modal needed
+  async function quickStatusChange(e: React.MouseEvent, jobId: string, newStatus: JobStatus) {
+    e.stopPropagation(); // don't open the modal
+    const updates: Record<string, unknown> = { status: newStatus };
+    const now = new Date().toISOString();
+    if (newStatus === "applied") updates.applied_date = now;
+    if (newStatus === "interview") updates.interview_date = null;
+    if (newStatus === "archived") updates.archived_date = now;
+
+    try {
+      const res = await fetch("/api/jobs/update", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: jobId, updates }),
+      });
+      const result = await res.json();
+      if (result.data) handleJobUpdate(result.data);
+    } catch (err) {
+      console.error("Quick status change failed:", err);
+    }
+  }
+
+  // Determine which quick actions to show based on the current page's status
+  function getQuickActions(currentStatus: JobStatus) {
+    switch (currentStatus) {
+      case "saved":
+        return [
+          { status: "applied" as JobStatus, icon: Send, label: "Applied" },
+          { status: "archived" as JobStatus, icon: Archive, label: "Archive" },
+        ];
+      case "applied":
+        return [
+          { status: "interview" as JobStatus, icon: CalendarClock, label: "Interview" },
+          { status: "archived" as JobStatus, icon: Archive, label: "Archive" },
+        ];
+      case "interview":
+        return [
+          { status: "offer" as JobStatus, icon: Send, label: "Offer" },
+          { status: "archived" as JobStatus, icon: Archive, label: "Archive" },
+        ];
+      default:
+        return [];
+    }
+  }
+
   const sortOptions: { field: SortField; label: string }[] = [
     { field: "scraped_at", label: "Date Added" },
     { field: "relevance_score", label: "AI Score" },
     { field: "salary_min", label: "Salary" },
+    { field: "deadline", label: "Deadline" },
     { field: "title", label: "Title" },
   ];
 
@@ -158,6 +210,7 @@ export function JobList({
               )}
             </button>
           ))}
+          <ExportButton statuses={statuses} filename={exportFilename} />
         </div>
       </div>
 
@@ -227,27 +280,45 @@ export function JobList({
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {job.relevance_score !== null && (
-                    <span
-                      className={`rounded-full px-2.5 py-1 text-xs font-bold ${
-                        job.relevance_score >= 70
-                          ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                          : job.relevance_score >= 40
-                            ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
-                            : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-                        }`}
-                    >
-                      {job.relevance_score}
-                    </span>
-                  )}
-                  {job.salary_min && (
-                    <span className="whitespace-nowrap rounded-full bg-[var(--accent)] px-3 py-1 text-xs font-medium">
-                      ${(job.salary_min / 1000).toFixed(0)}k
-                      {job.salary_max
-                        ? `–$${(job.salary_max / 1000).toFixed(0)}k`
-                        : "+"}
-                    </span>
+                <div className="flex shrink-0 flex-col items-end gap-2">
+                  <div className="flex items-center gap-2">
+                    {job.relevance_score !== null && (
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+                          job.relevance_score >= 70
+                            ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                            : job.relevance_score >= 40
+                              ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+                              : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+                          }`}
+                      >
+                        {job.relevance_score}
+                      </span>
+                    )}
+                    {job.salary_min && (
+                      <span className="whitespace-nowrap rounded-full bg-[var(--accent)] px-3 py-1 text-xs font-medium">
+                        ${(job.salary_min / 1000).toFixed(0)}k
+                        {job.salary_max
+                          ? `–$${(job.salary_max / 1000).toFixed(0)}k`
+                          : "+"}
+                      </span>
+                    )}
+                  </div>
+                  {/* Quick action buttons — aligned right under the badges */}
+                  {getQuickActions(job.status).length > 0 && (
+                    <div className="flex gap-1.5">
+                      {getQuickActions(job.status).map((action) => (
+                        <button
+                          key={action.status}
+                          onClick={(e) => quickStatusChange(e, job.id, action.status)}
+                          className="flex items-center gap-1 rounded-lg border border-[var(--sidebar-border)] px-2 py-1 text-xs text-[var(--muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--foreground)]"
+                          title={`Mark as ${action.label}`}
+                        >
+                          <action.icon className="h-3 w-3" />
+                          {action.label}
+                        </button>
+                      ))}
+                    </div>
                   )}
                 </div>
               </div>

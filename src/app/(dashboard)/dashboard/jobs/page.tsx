@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { loadSettings } from "@/lib/settings";
 import Link from "next/link";
 import {
   Briefcase,
@@ -22,14 +23,46 @@ export default function AllJobsPage() {
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [lastSavedCount, setLastSavedCount] = useState(0);
   const [scoreThreshold, setScoreThreshold] = useState(40);
+  const [geminiContext, setGeminiContext] = useState("");
 
-  function handleScrapeResults(jobs: PreviewJob[]) {
-    setPreview(jobs);
+  // Load settings on mount
+  useEffect(() => {
+    const s = loadSettings();
+    setScoreThreshold(s.scoreThreshold);
+    setGeminiContext(s.geminiContext);
+  }, []);
+
+  async function handleScrapeResults(jobs: PreviewJob[]) {
     setSaveMessage(null);
     setLastSavedCount(0);
-    if (jobs.length > 0) {
-      runScoring(jobs);
+
+    if (jobs.length === 0) {
+      setPreview(jobs);
+      return;
     }
+
+    // Check which URLs are already in the database
+    try {
+      const res = await fetch("/api/jobs/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ urls: jobs.map((j) => j.url) }),
+      });
+      const { existing } = await res.json();
+      const existingSet = new Set<string>(existing ?? []);
+
+      const marked = jobs.map((j) => ({
+        ...j,
+        already_saved: existingSet.has(j.url),
+        selected: false,
+      }));
+      setPreview(marked);
+    } catch {
+      // If check fails, just show all as unsaved
+      setPreview(jobs);
+    }
+
+    runScoring(jobs);
   }
 
   async function runScoring(jobs: PreviewJob[]) {
@@ -48,7 +81,7 @@ export default function AllJobsPage() {
             salary_max: j.salary_max,
           })),
           userContext:
-            "junior developer looking for full-stack, frontend, or software developer roles in Toronto/GTA/Ontario",
+            geminiContext || "junior developer looking for full-stack, frontend, or software developer roles in Toronto/GTA/Ontario",
         }),
       });
 
@@ -80,7 +113,9 @@ export default function AllJobsPage() {
 
   function toggleSelect(url: string) {
     setPreview((prev) =>
-      prev.map((j) => (j.url === url ? { ...j, selected: !j.selected } : j))
+      prev.map((j) =>
+        j.url === url && !j.already_saved ? { ...j, selected: !j.selected } : j
+      )
     );
   }
 
@@ -88,13 +123,15 @@ export default function AllJobsPage() {
     setPreview((prev) =>
       prev.map((j) => ({
         ...j,
-        selected: (j.relevance_score ?? 0) >= scoreThreshold,
+        selected: !j.already_saved && (j.relevance_score ?? 0) >= scoreThreshold,
       }))
     );
   }
 
   function selectAll(selected: boolean) {
-    setPreview((prev) => prev.map((j) => ({ ...j, selected })));
+    setPreview((prev) =>
+      prev.map((j) => ({ ...j, selected: selected && !j.already_saved }))
+    );
   }
 
   async function handleSave() {
@@ -130,6 +167,8 @@ export default function AllJobsPage() {
 
   const selectedCount = preview.filter((j) => j.selected).length;
   const scoredCount = preview.filter((j) => j.relevance_score !== null).length;
+  const alreadySavedCount = preview.filter((j) => j.already_saved).length;
+  const newCount = preview.length - alreadySavedCount;
 
   return (
     <div className="min-w-0 space-y-6 overflow-hidden">
@@ -178,11 +217,17 @@ export default function AllJobsPage() {
               ) : scoredCount > 0 ? (
                 <span className="flex items-center gap-2 text-[var(--success)]">
                   <Sparkles className="h-4 w-4" />
-                  {scoredCount} jobs scored · {preview.length} remaining
+                  {scoredCount} scored · {newCount} new
+                  {alreadySavedCount > 0 && (
+                    <span className="text-[var(--muted)]">
+                      · {alreadySavedCount} already saved
+                    </span>
+                  )}
                 </span>
               ) : (
                 <span className="text-[var(--muted)]">
                   {preview.length} jobs found
+                  {alreadySavedCount > 0 && ` · ${alreadySavedCount} already saved`}
                 </span>
               )}
             </div>
@@ -239,22 +284,31 @@ export default function AllJobsPage() {
             <div
               key={job.url}
               onClick={() => toggleSelect(job.url)}
-              className={`cursor-pointer rounded-xl border p-4 transition-colors ${
-                job.selected
-                  ? "border-[var(--primary)] bg-blue-50 dark:bg-blue-950/30"
-                  : "border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] hover:border-[var(--primary)]/50"
+              className={`rounded-xl border p-4 transition-colors ${
+                job.already_saved
+                  ? "cursor-default border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] opacity-50"
+                  : job.selected
+                    ? "cursor-pointer border-[var(--primary)] bg-blue-50 dark:bg-blue-950/30"
+                    : "cursor-pointer border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] hover:border-[var(--primary)]/50"
               }`}
             >
               <div className="flex items-start gap-3">
-                <div
-                  className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
-                    job.selected
-                      ? "border-[var(--primary)] bg-[var(--primary)] text-white"
-                      : "border-[var(--sidebar-border)]"
-                  }`}
-                >
-                  {job.selected && <Check className="h-3 w-3" />}
-                </div>
+                {/* Checkbox or "saved" indicator */}
+                {job.already_saved ? (
+                  <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border border-green-500 bg-green-500 text-white">
+                    <Check className="h-3 w-3" />
+                  </div>
+                ) : (
+                  <div
+                    className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
+                      job.selected
+                        ? "border-[var(--primary)] bg-[var(--primary)] text-white"
+                        : "border-[var(--sidebar-border)]"
+                    }`}
+                  >
+                    {job.selected && <Check className="h-3 w-3" />}
+                  </div>
+                )}
 
                 <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-3">
@@ -270,6 +324,11 @@ export default function AllJobsPage() {
                       </a>
                       <p className="text-sm text-[var(--muted)]">
                         {job.company} · {job.location}
+                        {job.already_saved && (
+                          <span className="ml-2 inline-block rounded bg-green-100 px-1.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900 dark:text-green-300">
+                            Already saved
+                          </span>
+                        )}
                       </p>
                     </div>
 
