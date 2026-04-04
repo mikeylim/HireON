@@ -62,4 +62,5 @@ export interface Job {
   rejected_date: string | null;
   rejection_reason: string | null;
   archived_date: string | null;
+  archive_reason: string | null;
 }

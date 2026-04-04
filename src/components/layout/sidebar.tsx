@@ -15,7 +15,11 @@ import {
   PanelLeftOpen,
   PlusCircle,
   Trophy,
+  Sun,
+  Moon,
+  Monitor,
 } from "lucide-react";
+import { useTheme } from "./theme-context";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "./sidebar-context";
 
@@ -34,6 +38,17 @@ const menuItems = [
 export function Sidebar() {
   const pathname = usePathname();
   const { collapsed, toggle } = useSidebar();
+  const { theme, setTheme } = useTheme();
+
+  // Cycle through: light → dark → system
+  function cycleTheme() {
+    if (theme === "light") setTheme("dark");
+    else if (theme === "dark") setTheme("system");
+    else setTheme("light");
+  }
+
+  const ThemeIcon = theme === "dark" ? Moon : theme === "light" ? Sun : Monitor;
+  const themeLabel = theme === "dark" ? "Dark" : theme === "light" ? "Light" : "System";
 
   return (
     <aside
@@ -102,12 +117,23 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Footer */}
-      {!collapsed && (
-        <div className="border-t border-[var(--sidebar-border)] p-4 text-xs text-[var(--muted)]">
-          HireON v0.1.0
-        </div>
-      )}
+      {/* Footer — theme toggle + version */}
+      <div className="border-t border-[var(--sidebar-border)] p-3">
+        <button
+          onClick={cycleTheme}
+          title={`Theme: ${themeLabel}`}
+          className={cn(
+            "flex items-center rounded-lg text-xs font-medium text-[var(--muted)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--foreground)]",
+            collapsed ? "justify-center p-2" : "gap-2 px-3 py-2"
+          )}
+        >
+          <ThemeIcon className="h-4 w-4 shrink-0" />
+          {!collapsed && themeLabel}
+        </button>
+        {!collapsed && (
+          <p className="mt-2 px-3 text-xs text-[var(--muted)]">HireON v0.1.0</p>
+        )}
+      </div>
     </aside>
   );
 }

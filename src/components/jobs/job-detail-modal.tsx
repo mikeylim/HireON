@@ -92,6 +92,10 @@ export function JobDetailModal({
   const [rejectionReason, setRejectionReason] = useState(job.rejection_reason ?? "");
   const [rejectedDate, setRejectedDate] = useState(job.rejected_date?.slice(0, 10) ?? "");
 
+  // Archive fields
+  const [archiveReason, setArchiveReason] = useState(job.archive_reason ?? "");
+  const [archivedDate, setArchivedDate] = useState(job.archived_date?.slice(0, 10) ?? "");
+
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -131,6 +135,8 @@ export function JobDetailModal({
     setOfferDeadline(job.offer_deadline?.slice(0, 10) ?? "");
     setRejectionReason(job.rejection_reason ?? "");
     setRejectedDate(job.rejected_date?.slice(0, 10) ?? "");
+    setArchiveReason(job.archive_reason ?? "");
+    setArchivedDate(job.archived_date?.slice(0, 10) ?? "");
   }, [job]);
 
   // Generic update helper
@@ -199,6 +205,8 @@ export function JobDetailModal({
       offer_deadline: offerDeadline || null,
       rejection_reason: rejectionReason || null,
       rejected_date: rejectedDate || null,
+      archive_reason: archiveReason || null,
+      archived_date: archivedDate || null,
     };
     await updateJob(updates);
   }
@@ -244,7 +252,9 @@ export function JobDetailModal({
     offerDate !== (job.offer_date?.slice(0, 10) ?? "") ||
     offerDeadline !== (job.offer_deadline?.slice(0, 10) ?? "") ||
     rejectionReason !== (job.rejection_reason ?? "") ||
-    rejectedDate !== (job.rejected_date?.slice(0, 10) ?? "");
+    rejectedDate !== (job.rejected_date?.slice(0, 10) ?? "") ||
+    archiveReason !== (job.archive_reason ?? "") ||
+    archivedDate !== (job.archived_date?.slice(0, 10) ?? "");
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -642,6 +652,46 @@ export function JobDetailModal({
                 type="date"
                 value={rejectedDate}
                 onChange={(e) => setRejectedDate(e.target.value)}
+                className={inputClass}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ── Archive details — shown when status is archived ── */}
+        {job.status === "archived" && (
+          <div className="mt-5 space-y-3 rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/30">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+              Archive Details
+            </h3>
+            <div>
+              <label className={labelClass}>Reason for archiving</label>
+              <select
+                value={archiveReason}
+                onChange={(e) => setArchiveReason(e.target.value)}
+                className={inputClass}
+              >
+                <option value="">Select reason...</option>
+                <option value="posting_expired">Job posting expired</option>
+                <option value="position_filled">Position already filled</option>
+                <option value="not_interested">No longer interested</option>
+                <option value="declined_offer">Declined the offer</option>
+                <option value="ghosted">Ghosted after applying</option>
+                <option value="underqualified">Underqualified for the role</option>
+                <option value="overqualified">Overqualified for the role</option>
+                <option value="low_salary">Salary too low</option>
+                <option value="bad_reviews">Bad company reviews</option>
+                <option value="found_better">Found a better opportunity</option>
+                <option value="duplicate">Duplicate posting</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div>
+              <label className={labelClass}>Date Archived</label>
+              <input
+                type="date"
+                value={archivedDate}
+                onChange={(e) => setArchivedDate(e.target.value)}
                 className={inputClass}
               />
             </div>

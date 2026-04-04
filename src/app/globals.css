@@ -1,5 +1,6 @@
 @import "tailwindcss";
 
+/* Light mode (default) */
 :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -14,17 +15,16 @@
   --warning: #f59e0b;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-    --sidebar-bg: #111827;
-    --sidebar-border: #1f2937;
-    --primary: #3b82f6;
-    --primary-hover: #2563eb;
-    --muted: #94a3b8;
-    --accent: #1e293b;
-  }
+/* Dark mode — applied via .dark class on <html> */
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  --sidebar-bg: #111827;
+  --sidebar-border: #1f2937;
+  --primary: #3b82f6;
+  --primary-hover: #2563eb;
+  --muted: #94a3b8;
+  --accent: #1e293b;
 }
 
 body {

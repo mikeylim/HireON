@@ -13,9 +13,11 @@ import {
   Trophy,
   TrendingUp,
   Sparkles,
+  CalendarRange,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { titleCase } from "@/lib/utils";
+import { JobDetailModal } from "@/components/jobs/job-detail-modal";
 import type { Job } from "@/lib/types/job";
 
 interface StatCard {
@@ -30,7 +32,9 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<StatCard[]>([]);
   const [deadlineJobs, setDeadlineJobs] = useState<Job[]>([]);
   const [followUpJobs, setFollowUpJobs] = useState<Job[]>([]);
+  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [appliedThisWeek, setAppliedThisWeek] = useState(0);
+  const [appliedThisMonth, setAppliedThisMonth] = useState(0);
   const [interviewRate, setInterviewRate] = useState<number | null>(null);
 
   const loadData = useCallback(async () => {
@@ -51,6 +55,7 @@ export default function DashboardPage() {
       deadlinesRes,
       followUpRes,
       appliedWeekRes,
+      appliedMonthRes,
       totalAppliedRes,
       totalInterviewsRes,
     ] = await Promise.all([
@@ -84,6 +89,12 @@ export default function DashboardPage() {
         .select("*", { count: "exact", head: true })
         .eq("status", "applied")
         .gte("applied_date", oneWeekAgo),
+      // Applied this month
+      supabase
+        .from("jobs")
+        .select("*", { count: "exact", head: true })
+        .in("status", ["applied", "interview", "offer", "rejected"])
+        .gte("applied_date", new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
       // Total applied ever (for interview rate calc)
       supabase
         .from("jobs")
@@ -108,6 +119,7 @@ export default function DashboardPage() {
     setDeadlineJobs((deadlinesRes.data as Job[]) ?? []);
     setFollowUpJobs((followUpRes.data as Job[]) ?? []);
     setAppliedThisWeek(appliedWeekRes.count ?? 0);
+    setAppliedThisMonth(appliedMonthRes.count ?? 0);
 
     // Interview rate = (interviews + offers) / total applied
     const totalApplied = totalAppliedRes.count ?? 0;
@@ -156,6 +168,13 @@ export default function DashboardPage() {
             <p className="text-xs text-[var(--muted)]">Applied this week</p>
           </div>
         </div>
+        <div className="flex items-center gap-3">
+          <CalendarRange className="h-5 w-5 text-cyan-500" />
+          <div>
+            <p className="text-lg font-bold">{appliedThisMonth}</p>
+            <p className="text-xs text-[var(--muted)]">Applied this month</p>
+          </div>
+        </div>
         {interviewRate !== null && (
           <div className="flex items-center gap-3">
             <Sparkles className="h-5 w-5 text-purple-500" />
@@ -181,10 +200,10 @@ export default function DashboardPage() {
               (new Date(job.deadline!).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
             );
             return (
-              <Link
+              <div
                 key={job.id}
-                href={`/dashboard/${job.status === "applied" ? "applied" : "saved"}`}
-                className="flex items-center justify-between rounded-xl border border-[var(--warning)]/30 bg-yellow-50 p-4 transition-colors hover:border-[var(--warning)] dark:bg-yellow-950/20"
+                onClick={() => setSelectedJob(job)}
+                className="flex cursor-pointer items-center justify-between rounded-xl border border-[var(--warning)]/30 bg-yellow-50 p-4 transition-colors hover:border-[var(--warning)] dark:bg-yellow-950/20"
               >
                 <div>
                   <h3 className="font-semibold">{titleCase(job.title)}</h3>
@@ -201,7 +220,7 @@ export default function DashboardPage() {
                 >
                   {daysLeft === 0 ? "Today" : daysLeft === 1 ? "Tomorrow" : `${daysLeft} days left`}
                 </span>
-              </Link>
+              </div>
             );
           })}
         </div>
@@ -227,10 +246,10 @@ export default function DashboardPage() {
             const isToday = daysUntil === 0;
 
             return (
-              <Link
+              <div
                 key={job.id}
-                href="/dashboard/applied"
-                className={`flex items-center justify-between rounded-xl border p-4 transition-colors hover:border-[var(--primary)] ${
+                onClick={() => setSelectedJob(job)}
+                className={`flex cursor-pointer items-center justify-between rounded-xl border p-4 transition-colors hover:border-[var(--primary)] ${
                   isOverdue
                     ? "border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/20"
                     : isToday
@@ -262,7 +281,7 @@ export default function DashboardPage() {
                       ? "Follow up today"
                       : `In ${daysUntil} day${daysUntil !== 1 ? "s" : ""}`}
                 </span>
-              </Link>
+              </div>
             );
           })}
         </div>
@@ -296,6 +315,22 @@ export default function DashboardPage() {
           <ArrowRight className="h-5 w-5 text-[var(--muted)]" />
         </Link>
       </div>
+
+      {/* Job detail modal — opens when a deadline or follow-up card is clicked */}
+      {selectedJob && (
+        <JobDetailModal
+          job={selectedJob}
+          onClose={() => setSelectedJob(null)}
+          onUpdate={(updated) => {
+            setSelectedJob(updated);
+            loadData();
+          }}
+          onDelete={() => {
+            setSelectedJob(null);
+            loadData();
+          }}
+        />
+      )}
     </div>
   );
 }
