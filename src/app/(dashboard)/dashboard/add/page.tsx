@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Plus } from "lucide-react";
-import { supabase } from "@/lib/supabase/client";
 import type { JobStatus, JobType, WorkMode } from "@/lib/types/job";
 
 // All the fields the user can fill in when adding a job manually
@@ -129,8 +128,10 @@ export default function AddJobPage() {
     // Combine user notes with duration info
     const notes = [durationNote, form.notes.trim()].filter(Boolean).join("\n");
 
-    const { error: dbError } = await supabase.from("jobs").upsert(
-      {
+    const res = await fetch("/api/jobs/add", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
         title: form.title.trim(),
         company: form.company.trim(),
         location: form.location.trim() || "Toronto, ON",
@@ -145,14 +146,14 @@ export default function AddJobPage() {
         deadline: form.deadline || null,
         notes,
         tags: [],
-      },
-      { onConflict: "url", ignoreDuplicates: false }
-    );
+      }),
+    });
 
+    const result = await res.json();
     setSaving(false);
 
-    if (dbError) {
-      setError(dbError.message);
+    if (result.error) {
+      setError(result.error);
       return;
     }
 

@@ -18,6 +18,7 @@ export type WorkMode = "onsite" | "remote" | "hybrid";
 
 export interface Job {
   id: string;
+  user_id: string | null;
   title: string;
   company: string;
   location: string;

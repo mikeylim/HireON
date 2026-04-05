@@ -15,7 +15,7 @@ import {
   Sparkles,
   CalendarRange,
 } from "lucide-react";
-import { supabase } from "@/lib/supabase/client";
+import { createBrowserSupabase } from "@/lib/supabase/browser";
 import { titleCase } from "@/lib/utils";
 import { JobDetailModal } from "@/components/jobs/job-detail-modal";
 import type { Job } from "@/lib/types/job";
@@ -38,6 +38,7 @@ export default function DashboardPage() {
   const [interviewRate, setInterviewRate] = useState<number | null>(null);
 
   const loadData = useCallback(async () => {
+    const supabase = createBrowserSupabase();
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
     const sevenDaysFromNow = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();

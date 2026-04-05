@@ -9,7 +9,7 @@ import {
   CalendarClock,
   Archive,
 } from "lucide-react";
-import { supabase } from "@/lib/supabase/client";
+import { createBrowserSupabase } from "@/lib/supabase/browser";
 import { JobDetailModal } from "./job-detail-modal";
 import { ExportButton } from "./export-button";
 import type { Job, JobStatus } from "@/lib/types/job";
@@ -53,6 +53,7 @@ export function JobList({
       const from = (pageNum - 1) * JOBS_PER_PAGE;
       const to = from + JOBS_PER_PAGE - 1;
 
+      const supabase = createBrowserSupabase();
       let query = supabase
         .from("jobs")
         .select("*", { count: "exact" })

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Search, X } from "lucide-react";
-import { supabase } from "@/lib/supabase/client";
+import { createBrowserSupabase } from "@/lib/supabase/browser";
 import { titleCase } from "@/lib/utils";
 import { JobDetailModal } from "@/components/jobs/job-detail-modal";
 import type { Job } from "@/lib/types/job";
@@ -28,6 +28,7 @@ export function Topbar() {
 
     debounceRef.current = setTimeout(async () => {
       setSearching(true);
+      const supabase = createBrowserSupabase();
       const { data } = await supabase
         .from("jobs")
         .select("*")

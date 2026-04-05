@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase/client";
+import { createServerSupabase } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/supabase/auth";
 
 // POST /api/jobs/save
 // Takes an array of jobs the user has chosen to keep and inserts them into Supabase.
 // Deduplicates by URL — if a job already exists, it's silently skipped.
 export async function POST(req: NextRequest) {
   try {
+    const user = await getAuthUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const body = await req.json();
     const jobs: Array<{
       title: string;
@@ -46,8 +50,10 @@ export async function POST(req: NextRequest) {
       tags: job.tags,
       relevance_score: job.relevance_score,
       status: "saved",
+      user_id: user.id,
     }));
 
+    const supabase = await createServerSupabase();
     const { data, error } = await supabase
       .from("jobs")
       .upsert(rows, { onConflict: "url", ignoreDuplicates: true })

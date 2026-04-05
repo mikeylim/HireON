@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getAuthUser } from "@/lib/supabase/auth";
 import { fetchJobBankFeed } from "@/lib/scraper/jobbank";
 import { fetchAdzunaJobs } from "@/lib/scraper/adzuna";
 import { fetchJoobleJobs } from "@/lib/scraper/jooble";
@@ -13,6 +14,9 @@ type Source = (typeof SOURCES)[number];
 // The user decides which jobs to keep via /api/jobs/save.
 export async function POST(req: NextRequest) {
   try {
+    const user = await getAuthUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const body = await req.json();
     const keywords: string[] = body.keywords ?? ["developer"];
     const location: string = body.location ?? "Toronto, ON";

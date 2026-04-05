@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Download, Loader2 } from "lucide-react";
-import { supabase } from "@/lib/supabase/client";
+import { createBrowserSupabase } from "@/lib/supabase/browser";
 import type { JobStatus } from "@/lib/types/job";
 
 interface ExportButtonProps {
@@ -18,6 +18,7 @@ export function ExportButton({ statuses, filename = "hireon-jobs" }: ExportButto
     setExporting(true);
 
     try {
+      const supabase = createBrowserSupabase();
       const { data } = await supabase
         .from("jobs")
         .select("*")

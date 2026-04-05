@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase/client";
+import { createServerSupabase } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/supabase/auth";
 
 // DELETE /api/jobs/delete
 // Body: { ids: string[] }
-// Deletes one or more jobs permanently
 export async function DELETE(req: NextRequest) {
   try {
+    const user = await getAuthUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const { ids } = await req.json();
 
     if (!ids || ids.length === 0) {
@@ -15,6 +18,7 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
+    const supabase = await createServerSupabase();
     const { error } = await supabase
       .from("jobs")
       .delete()

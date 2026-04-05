@@ -1,17 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase/client";
+import { createServerSupabase } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/supabase/auth";
 
 // POST /api/jobs/check
 // Body: { urls: string[] }
 // Returns which URLs already exist in the database
 export async function POST(req: NextRequest) {
   try {
+    const user = await getAuthUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const { urls } = await req.json();
 
     if (!urls || urls.length === 0) {
       return NextResponse.json({ existing: [] });
     }
 
+    const supabase = await createServerSupabase();
     const { data } = await supabase
       .from("jobs")
       .select("url")
