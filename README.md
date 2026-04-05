@@ -2,6 +2,14 @@
 
 Job search dashboard for Ontario/GTA/Toronto. Scrapes postings from multiple free sources, scores them with Gemini AI for relevance, and lets you track your entire application pipeline in one place.
 
+## Preview
+
+### Dashboard
+![Dashboard](docs/dashboard_1.png)
+
+### AI-Powered Job Search
+![All Jobs](docs/all-jobs_1.png)
+
 ## Features
 
 **Search & Scrape**
