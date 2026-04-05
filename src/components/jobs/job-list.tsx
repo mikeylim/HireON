@@ -251,7 +251,13 @@ export function JobList({
             <div
               key={job.id}
               onClick={() => setSelectedJob(job)}
-              className="cursor-pointer rounded-xl border border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] p-4 transition-colors hover:border-[var(--primary)]"
+              className={`cursor-pointer rounded-xl border border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] p-4 transition-colors hover:border-[var(--primary)] ${
+                statuses.length > 1 && job.status === "rejected"
+                  ? "border-l-4 border-l-red-400 dark:border-l-red-600"
+                  : statuses.length > 1 && job.status === "archived"
+                    ? "border-l-4 border-l-gray-400 dark:border-l-gray-600"
+                    : ""
+              }`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
@@ -271,6 +277,29 @@ export function JobList({
                     {job.work_mode && job.work_mode !== "onsite" && (
                       <span className="rounded-full bg-[var(--accent)] px-2 py-0.5 text-xs text-[var(--muted)]">
                         {job.work_mode}
+                      </span>
+                    )}
+                    {/* Show status badge when the page lists multiple statuses */}
+                    {statuses.length > 1 && (
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                          job.status === "rejected"
+                            ? "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300"
+                            : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"
+                        }`}
+                      >
+                        {job.status}
+                      </span>
+                    )}
+                    {/* Show reason for rejected/archived jobs */}
+                    {job.status === "rejected" && job.rejection_reason && (
+                      <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs text-red-600 dark:bg-red-950 dark:text-red-400">
+                        {job.rejection_reason.replace(/_/g, " ")}
+                      </span>
+                    )}
+                    {job.status === "archived" && job.archive_reason && (
+                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+                        {job.archive_reason.replace(/_/g, " ")}
                       </span>
                     )}
                     {job.notes && (

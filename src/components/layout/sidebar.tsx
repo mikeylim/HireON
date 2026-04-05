@@ -59,14 +59,14 @@ export function Sidebar() {
     >
       {/* Logo + toggle button */}
       <div className="flex h-16 items-center justify-between border-b border-[var(--sidebar-border)] px-3">
-        <div className={cn("flex items-center gap-2", collapsed && "justify-center w-full")}>
+        <Link href="/dashboard" className={cn("flex items-center gap-2 transition-opacity hover:opacity-80", collapsed && "justify-center w-full")}>
           <Search className="h-6 w-6 shrink-0 text-[var(--primary)]" />
           {!collapsed && (
             <span className="text-xl font-bold">
               Hire<span className="text-[var(--primary)]">ON</span>
             </span>
           )}
-        </div>
+        </Link>
         {!collapsed && (
           <button
             onClick={toggle}
