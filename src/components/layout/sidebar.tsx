@@ -18,10 +18,7 @@ import {
   Sun,
   Moon,
   Monitor,
-  LogOut,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
 import { useTheme } from "./theme-context";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "./sidebar-context";
@@ -50,18 +47,8 @@ export function Sidebar() {
     else setTheme("light");
   }
 
-  const router = useRouter();
   const ThemeIcon = theme === "dark" ? Moon : theme === "light" ? Sun : Monitor;
   const themeLabel = theme === "dark" ? "Dark" : theme === "light" ? "Light" : "System";
-
-  async function handleLogout() {
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
-    await supabase.auth.signOut();
-    router.push("/login");
-  }
 
   return (
     <aside
@@ -142,17 +129,6 @@ export function Sidebar() {
         >
           <ThemeIcon className="h-4 w-4 shrink-0" />
           {!collapsed && themeLabel}
-        </button>
-        <button
-          onClick={handleLogout}
-          title="Sign out"
-          className={cn(
-            "flex items-center rounded-lg text-xs font-medium text-[var(--muted)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--destructive)]",
-            collapsed ? "justify-center p-2" : "gap-2 px-3 py-2"
-          )}
-        >
-          <LogOut className="h-4 w-4 shrink-0" />
-          {!collapsed && "Sign out"}
         </button>
       </div>
     </aside>
