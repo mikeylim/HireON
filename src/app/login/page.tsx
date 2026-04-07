@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
-import { Search, Loader2, Mail } from "lucide-react";
+import Image from "next/image";
+import { Loader2, Mail } from "lucide-react";
 
 // Browser-side Supabase client for auth actions
 const supabase = createBrowserClient(
@@ -62,14 +63,22 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-[var(--background)] px-4">
       <div className="w-full max-w-sm space-y-8">
-        {/* Logo */}
-        <div className="text-center">
-          <div className="flex items-center justify-center gap-2">
-            <Search className="h-8 w-8 text-[var(--primary)]" />
-            <span className="text-3xl font-bold">
-              Hire<span className="text-[var(--primary)]">ON</span>
-            </span>
-          </div>
+        {/* Logo — swaps between light and dark versions */}
+        <div className="flex flex-col items-center">
+          <Image
+            src="/hireon-logo-light.png"
+            alt="HireON"
+            width={200}
+            height={67}
+            className="block dark:hidden"
+          />
+          <Image
+            src="/hireon-logo-dark.png"
+            alt="HireON"
+            width={200}
+            height={67}
+            className="hidden dark:block"
+          />
           <p className="mt-2 text-sm text-[var(--muted)]">
             Ontario job search dashboard
           </p>

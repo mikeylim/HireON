@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
@@ -10,7 +11,6 @@ import {
   CalendarClock,
   XCircle,
   Settings,
-  Search,
   PanelLeftClose,
   PanelLeftOpen,
   PlusCircle,
@@ -60,12 +60,15 @@ export function Sidebar() {
       {/* Logo + toggle button */}
       <div className="flex h-16 items-center justify-between border-b border-[var(--sidebar-border)] px-3">
         <Link href="/dashboard" className={cn("flex items-center gap-2 transition-opacity hover:opacity-80", collapsed && "justify-center w-full")}>
-          <Search className="h-6 w-6 shrink-0 text-[var(--primary)]" />
-          {!collapsed && (
-            <span className="text-xl font-bold">
-              Hire<span className="text-[var(--primary)]">ON</span>
-            </span>
-          )}
+          <Image
+            src={theme === "dark" || (theme === "system" && typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches)
+              ? "/hireon-logo-dark.png"
+              : "/hireon-logo-light.png"}
+            alt="HireON"
+            width={collapsed ? 28 : 140}
+            height={collapsed ? 28 : 48}
+            className="shrink-0"
+          />
         </Link>
         {!collapsed && (
           <button
