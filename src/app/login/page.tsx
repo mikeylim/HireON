@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import Image from "next/image";
 import { Loader2, Mail } from "lucide-react";
@@ -12,6 +13,7 @@ const supabase = createBrowserClient(
 );
 
 export default function LoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -157,8 +159,25 @@ export default function LoginPage() {
           </p>
         )}
 
+        {/* Divider */}
+        <div className="flex items-center gap-3">
+          <div className="h-px flex-1 bg-[var(--sidebar-border)]" />
+          <span className="text-xs text-[var(--muted)]">or</span>
+          <div className="h-px flex-1 bg-[var(--sidebar-border)]" />
+        </div>
+
+        {/* Guest login */}
+        <button
+          onClick={() => {
+            document.cookie = "hireon-guest=true; path=/; max-age=86400";
+            router.push("/dashboard");
+          }}
+          className="w-full rounded-lg border border-[var(--sidebar-border)] px-4 py-3 text-sm font-medium text-[var(--muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--foreground)]"
+        >
+          Continue as Guest
+        </button>
         <p className="text-center text-xs text-[var(--muted)]">
-          No account needed — just sign in and your data is saved.
+          Guest mode is view-only. No data will be saved to the database.
         </p>
       </div>
     </div>

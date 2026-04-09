@@ -5,10 +5,11 @@ import { getAuthUser } from "@/lib/supabase/auth";
 // POST /api/jobs/check
 // Body: { urls: string[] }
 // Returns which URLs already exist in the database
+// Guests get an empty result (they have no saved jobs)
 export async function POST(req: NextRequest) {
   try {
     const user = await getAuthUser();
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!user) return NextResponse.json({ existing: [] });
 
     const { urls } = await req.json();
 

@@ -8,7 +8,10 @@ import { getAuthUser } from "@/lib/supabase/auth";
 export async function POST(req: NextRequest) {
   try {
     const user = await getAuthUser();
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!user) return NextResponse.json(
+      { data: null, error: "guest", message: "Sign in to save jobs to your collection." },
+      { status: 401 }
+    );
 
     const body = await req.json();
     const jobs: Array<{

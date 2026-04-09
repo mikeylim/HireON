@@ -1,13 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAuthUser } from "@/lib/supabase/auth";
 import { scoreJobs } from "@/lib/gemini/score";
 
 // POST /api/score
-// Takes an array of preview jobs + user context, returns them with relevance scores.
+// Scoring is read-only — allow guests to try it
 export async function POST(req: NextRequest) {
   try {
-    const user = await getAuthUser();
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await req.json();
     const jobs: Array<{

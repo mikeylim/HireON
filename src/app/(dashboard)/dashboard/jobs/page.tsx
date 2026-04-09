@@ -153,6 +153,13 @@ export default function AllJobsPage() {
 
       const result = await res.json();
       setSaveMessage(result.message);
+
+      // Guest users can't save — don't remove from preview or show success
+      if (result.error === "guest") {
+        setLastSavedCount(0);
+        return;
+      }
+
       setLastSavedCount(selected.length);
 
       // Remove saved jobs from preview
@@ -187,7 +194,7 @@ export default function AllJobsPage() {
         <ScrapeButton onResults={handleScrapeResults} />
       </div>
 
-      {/* Post-save action bar — appears after saving jobs */}
+      {/* Post-save: success bar for authenticated users */}
       {lastSavedCount > 0 && saveMessage && (
         <div className="flex items-center justify-between rounded-xl border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-950/30">
           <p className="text-sm font-medium text-green-700 dark:text-green-300">
@@ -198,6 +205,22 @@ export default function AllJobsPage() {
             className="flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700"
           >
             Go to Saved Jobs
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+      )}
+
+      {/* Post-save: guest warning */}
+      {lastSavedCount === 0 && saveMessage && saveMessage.includes("Sign in") && (
+        <div className="flex items-center justify-between rounded-xl border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-800 dark:bg-yellow-950/30">
+          <p className="text-sm font-medium text-yellow-700 dark:text-yellow-300">
+            {saveMessage}
+          </p>
+          <Link
+            href="/login"
+            className="flex items-center gap-1.5 rounded-lg bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--primary-hover)]"
+          >
+            Sign in
             <ArrowRight className="h-4 w-4" />
           </Link>
         </div>

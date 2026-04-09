@@ -66,8 +66,8 @@ export function Sidebar() {
             width={collapsed ? 28 : 140}
             height={collapsed ? 28 : 48}
             priority
-            className="shrink-0 block dark:hidden"
-            style={{ width: collapsed ? "28px" : "140px", height: "auto" }}
+            className="shrink-0 block dark:hidden ml-1.5 mb-2"
+            style={{ width: collapsed ? "24px" : "132px", height: "auto" }}
           />
           <Image
             src="/hireon-logo-dark.png"
@@ -75,7 +75,7 @@ export function Sidebar() {
             width={collapsed ? 28 : 140}
             height={collapsed ? 28 : 48}
             priority
-            className="shrink-0 hidden dark:block"
+            className="shrink-0 hidden dark:block mb-2"
             style={{ width: collapsed ? "28px" : "140px", height: "auto" }}
           />
         </Link>

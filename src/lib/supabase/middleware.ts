@@ -32,9 +32,13 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // If not logged in and trying to access a protected page, redirect to login
+  // Allow guest mode — check for the guest cookie
+  const isGuest = request.cookies.get("hireon-guest")?.value === "true";
+
+  // If not logged in and not a guest, redirect to login
   if (
     !user &&
+    !isGuest &&
     !request.nextUrl.pathname.startsWith("/login") &&
     !request.nextUrl.pathname.startsWith("/auth")
   ) {

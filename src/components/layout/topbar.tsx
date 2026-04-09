@@ -175,8 +175,15 @@ export function Topbar() {
           )}
         </div>
 
-        {/* Profile menu */}
-        {user && (
+        {/* Profile menu — or sign in link for guests */}
+        {!user ? (
+          <Link
+            href="/login"
+            className="shrink-0 rounded-lg bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--primary-hover)]"
+          >
+            Sign in
+          </Link>
+        ) : (
           <div ref={profileRef} className="relative">
             <button
               onClick={() => setProfileOpen((prev) => !prev)}
