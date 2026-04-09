@@ -10,7 +10,10 @@ export async function GET(request: Request) {
     const supabase = await createServerSupabase();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      return NextResponse.redirect(`${origin}/dashboard`);
+      // Clear guest cookie now that the user is properly signed in
+      const response = NextResponse.redirect(`${origin}/dashboard`);
+      response.cookies.set("hireon-guest", "", { path: "/", maxAge: 0 });
+      return response;
     }
   }
 

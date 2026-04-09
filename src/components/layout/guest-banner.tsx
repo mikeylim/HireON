@@ -4,14 +4,32 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
+import { createBrowserSupabase } from "@/lib/supabase/browser";
 
 // Shows a banner at the top when the user is in guest mode
+// Hides if the user is actually authenticated (even if the cookie lingers)
 export function GuestBanner() {
   const [isGuest, setIsGuest] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
-    setIsGuest(document.cookie.includes("hireon-guest=true"));
+    async function check() {
+      const hasGuestCookie = document.cookie.includes("hireon-guest=true");
+      if (!hasGuestCookie) {
+        setIsGuest(false);
+        return;
+      }
+      // Double-check: if user is actually signed in, clear the cookie and hide
+      const supabase = createBrowserSupabase();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        document.cookie = "hireon-guest=; path=/; max-age=0";
+        setIsGuest(false);
+      } else {
+        setIsGuest(true);
+      }
+    }
+    check();
   }, []);
 
   if (!isGuest) return null;
