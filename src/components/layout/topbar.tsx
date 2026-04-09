@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { Search, X, User, Settings, LogOut } from "lucide-react";
@@ -12,8 +11,6 @@ import type { Job } from "@/lib/types/job";
 import type { User as SupaUser } from "@supabase/supabase-js";
 
 export function Topbar() {
-  const router = useRouter();
-
   // Search state
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Job[]>([]);
@@ -89,7 +86,8 @@ export function Topbar() {
   async function handleLogout() {
     const supabase = createBrowserSupabase();
     await supabase.auth.signOut();
-    router.push("/login");
+    // Full page reload instead of client-side nav — ensures Vercel doesn't serve cached pages
+    window.location.href = "/login";
   }
 
   function statusColor(status: string) {
