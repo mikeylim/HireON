@@ -228,7 +228,7 @@ export function Topbar() {
 
                 <button
                   onClick={handleLogout}
-                  className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-[var(--muted)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--destructive)]"
+                  className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-[var(--muted)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--destructive)] cursor-pointer"
                 >
                   <LogOut className="h-4 w-4" />
                   Sign out
