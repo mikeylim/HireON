@@ -70,14 +70,18 @@ export default function LoginPage() {
             alt="HireON"
             width={200}
             height={67}
+            priority
             className="block dark:hidden"
+            style={{ width: "200px", height: "auto" }}
           />
           <Image
             src="/hireon-logo-dark.png"
             alt="HireON"
             width={200}
             height={67}
+            priority
             className="hidden dark:block"
+            style={{ width: "200px", height: "auto" }}
           />
           <p className="mt-2 text-sm text-[var(--muted)]">
             Ontario job search dashboard

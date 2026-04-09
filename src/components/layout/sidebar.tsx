@@ -61,13 +61,22 @@ export function Sidebar() {
       <div className="flex h-16 items-center justify-between border-b border-[var(--sidebar-border)] px-3">
         <Link href="/dashboard" className={cn("flex items-center gap-2 transition-opacity hover:opacity-80", collapsed && "justify-center w-full")}>
           <Image
-            src={theme === "dark" || (theme === "system" && typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches)
-              ? "/hireon-logo-dark.png"
-              : "/hireon-logo-light.png"}
+            src="/hireon-logo-light.png"
             alt="HireON"
             width={collapsed ? 28 : 140}
             height={collapsed ? 28 : 48}
-            className="shrink-0"
+            priority
+            className="shrink-0 block dark:hidden"
+            style={{ width: collapsed ? "28px" : "140px", height: "auto" }}
+          />
+          <Image
+            src="/hireon-logo-dark.png"
+            alt="HireON"
+            width={collapsed ? 28 : 140}
+            height={collapsed ? 28 : 48}
+            priority
+            className="shrink-0 hidden dark:block"
+            style={{ width: collapsed ? "28px" : "140px", height: "auto" }}
           />
         </Link>
         {!collapsed && (
