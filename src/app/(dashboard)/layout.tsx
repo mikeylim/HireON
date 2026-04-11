@@ -16,12 +16,13 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       <div
         className={cn(
           "flex min-w-0 flex-1 flex-col overflow-hidden transition-all duration-200",
-          collapsed ? "ml-16" : "ml-64"
+          // No left margin on mobile (sidebar is an overlay), margin on desktop
+          collapsed ? "md:ml-16" : "md:ml-64"
         )}
       >
         <GuestBanner />
         <Topbar />
-        <main className="min-w-0 flex-1 overflow-auto p-6">{children}</main>
+        <main className="min-w-0 flex-1 overflow-auto p-4 md:p-6">{children}</main>
       </div>
     </div>
   );

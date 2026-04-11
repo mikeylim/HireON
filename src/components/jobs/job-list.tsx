@@ -182,7 +182,7 @@ export function JobList({
   return (
     <>
       {/* Search + sort controls */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="space-y-3">
         <input
           type="text"
           value={searchQuery}
@@ -191,10 +191,10 @@ export function JobList({
             setPage(1);
           }}
           placeholder="Filter by title or company..."
-          className="flex-1 rounded-lg border border-[var(--sidebar-border)] bg-[var(--accent)] px-3 py-2 text-sm outline-none placeholder:text-[var(--muted)] focus:border-[var(--primary)]"
+          className="w-full rounded-lg border border-[var(--sidebar-border)] bg-[var(--accent)] px-3 py-2 text-sm outline-none placeholder:text-[var(--muted)] focus:border-[var(--primary)]"
         />
 
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1">
           {sortOptions.map((opt) => (
             <button
               key={opt.field}
@@ -214,6 +214,7 @@ export function JobList({
           <ExportButton statuses={statuses} filename={exportFilename} />
         </div>
       </div>
+
 
       {/* Count + pagination header */}
       <div className="flex items-end justify-between">

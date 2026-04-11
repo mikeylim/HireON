@@ -3,14 +3,16 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Search, X, User, Settings, LogOut } from "lucide-react";
+import { Search, X, Menu, Settings, LogOut } from "lucide-react";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 import { titleCase } from "@/lib/utils";
 import { JobDetailModal } from "@/components/jobs/job-detail-modal";
+import { useSidebar } from "./sidebar-context";
 import type { Job } from "@/lib/types/job";
 import type { User as SupaUser } from "@supabase/supabase-js";
 
 export function Topbar() {
+  const { setMobileOpen } = useSidebar();
   // Search state
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Job[]>([]);
@@ -109,7 +111,15 @@ export function Topbar() {
 
   return (
     <>
-      <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-4 border-b border-[var(--sidebar-border)] bg-[var(--background)] px-6">
+      <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-4 border-b border-[var(--sidebar-border)] bg-[var(--background)] px-4 md:px-6">
+        {/* Mobile hamburger */}
+        <button
+          onClick={() => setMobileOpen(true)}
+          className="rounded-lg p-2 text-[var(--muted)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] md:hidden"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+
         {/* Global search */}
         <div ref={wrapperRef} className="relative w-full max-w-md">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted)]" />
