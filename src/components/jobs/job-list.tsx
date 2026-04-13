@@ -8,6 +8,10 @@ import {
   Send,
   CalendarClock,
   Archive,
+  Trash2,
+  Check,
+  Loader2,
+  X,
 } from "lucide-react";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 import { JobDetailModal } from "./job-detail-modal";
@@ -42,6 +46,10 @@ export function JobList({
   const [sortField, setSortField] = useState<SortField>("scraped_at");
   const [sortAsc, setSortAsc] = useState(false);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  // Multi-select state for bulk actions — set of selected job IDs
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkActing, setBulkActing] = useState(false);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
   const totalPages = Math.max(1, Math.ceil(total / JOBS_PER_PAGE));
@@ -171,6 +179,75 @@ export function JobList({
     }
   }
 
+  // Toggle a single job's selection
+  function toggleSelection(jobId: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(jobId)) next.delete(jobId);
+      else next.add(jobId);
+      return next;
+    });
+  }
+
+  // Select/deselect every visible job on this page
+  function toggleSelectAll() {
+    if (selectedIds.size === jobs.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(jobs.map((j) => j.id)));
+    }
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+    setConfirmBulkDelete(false);
+  }
+
+  // Bulk status change — hits the API once with all selected IDs
+  async function bulkChangeStatus(newStatus: JobStatus) {
+    if (selectedIds.size === 0) return;
+    setBulkActing(true);
+    const now = new Date().toISOString();
+    const updates: Record<string, unknown> = { status: newStatus };
+    if (newStatus === "applied") updates.applied_date = now;
+    if (newStatus === "archived") updates.archived_date = now;
+    if (newStatus === "rejected") updates.rejected_date = now;
+    if (newStatus === "offer") updates.offer_date = now;
+
+    try {
+      await fetch("/api/jobs/update", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: Array.from(selectedIds), updates }),
+      });
+      clearSelection();
+      loadJobs(page);
+    } catch (err) {
+      console.error("Bulk status change failed:", err);
+    } finally {
+      setBulkActing(false);
+    }
+  }
+
+  // Bulk delete — permanently removes selected jobs
+  async function bulkDelete() {
+    if (selectedIds.size === 0) return;
+    setBulkActing(true);
+    try {
+      await fetch("/api/jobs/delete", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: Array.from(selectedIds) }),
+      });
+      clearSelection();
+      loadJobs(page);
+    } catch (err) {
+      console.error("Bulk delete failed:", err);
+    } finally {
+      setBulkActing(false);
+    }
+  }
+
   const sortOptions: { field: SortField; label: string }[] = [
     { field: "scraped_at", label: "Date Added" },
     { field: "relevance_score", label: "AI Score" },
@@ -215,12 +292,94 @@ export function JobList({
         </div>
       </div>
 
+      {/* Bulk action bar — shown when one or more jobs are selected */}
+      {selectedIds.size > 0 && (
+        <div className="sticky top-16 z-20 flex flex-wrap items-center gap-2 rounded-xl border border-[var(--primary)] bg-[var(--primary)] p-3 text-white shadow-lg">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={clearSelection}
+              className="rounded-lg p-1 hover:bg-white/20"
+              title="Clear selection"
+            >
+              <X className="h-4 w-4" />
+            </button>
+            <span className="text-sm font-medium">
+              {selectedIds.size} selected
+            </span>
+          </div>
+
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            {/* Context-appropriate bulk status buttons */}
+            {statuses.length === 1 &&
+              getQuickActions(statuses[0]).map((action) => (
+                <button
+                  key={action.status}
+                  onClick={() => bulkChangeStatus(action.status)}
+                  disabled={bulkActing}
+                  className="flex items-center gap-1.5 rounded-lg bg-white/15 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-white/25 disabled:opacity-50"
+                >
+                  <action.icon className="h-3.5 w-3.5" />
+                  {action.label}
+                </button>
+              ))}
+
+            {/* Delete with confirmation */}
+            {confirmBulkDelete ? (
+              <>
+                <span className="text-xs">Delete permanently?</span>
+                <button
+                  onClick={bulkDelete}
+                  disabled={bulkActing}
+                  className="flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-red-700 disabled:opacity-50"
+                >
+                  {bulkActing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                  Yes
+                </button>
+                <button
+                  onClick={() => setConfirmBulkDelete(false)}
+                  className="rounded-lg bg-white/15 px-3 py-1.5 text-xs font-medium hover:bg-white/25"
+                >
+                  No
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => setConfirmBulkDelete(true)}
+                disabled={bulkActing}
+                className="flex items-center gap-1.5 rounded-lg bg-white/15 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-red-600 disabled:opacity-50"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Count + pagination header */}
       <div className="flex items-end justify-between">
-        <p className="text-sm text-[var(--muted)]">
-          {total} job{total !== 1 ? "s" : ""}
-        </p>
+        <div className="flex items-center gap-3">
+          {jobs.length > 0 && (
+            <button
+              onClick={toggleSelectAll}
+              className="flex items-center gap-1.5 text-xs font-medium text-[var(--muted)] hover:text-[var(--foreground)]"
+            >
+              <div
+                className={`flex h-4 w-4 items-center justify-center rounded border ${
+                  selectedIds.size === jobs.length
+                    ? "border-[var(--primary)] bg-[var(--primary)] text-white"
+                    : "border-[var(--sidebar-border)]"
+                }`}
+              >
+                {selectedIds.size === jobs.length && <Check className="h-2.5 w-2.5" />}
+              </div>
+              Select all
+            </button>
+          )}
+          <p className="text-sm text-[var(--muted)]">
+            {total} job{total !== 1 ? "s" : ""}
+          </p>
+        </div>
         {totalPages > 1 && (
           <div className="flex items-center gap-2">
             <button
@@ -254,6 +413,8 @@ export function JobList({
               key={job.id}
               onClick={() => setSelectedJob(job)}
               className={`cursor-pointer rounded-xl border border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] p-4 transition-colors hover:border-[var(--primary)] ${
+                selectedIds.has(job.id) ? "ring-2 ring-[var(--primary)]" : ""
+              } ${
                 statuses.length > 1 && job.status === "rejected"
                   ? "border-l-4 border-l-red-400 dark:border-l-red-600"
                   : statuses.length > 1 && job.status === "archived"
@@ -261,7 +422,23 @@ export function JobList({
                     : ""
               }`}
             >
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                {/* Selection checkbox — clicking doesn't open the modal */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleSelection(job.id);
+                  }}
+                  className={`mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors ${
+                    selectedIds.has(job.id)
+                      ? "border-[var(--primary)] bg-[var(--primary)] text-white"
+                      : "border-[var(--sidebar-border)] hover:border-[var(--primary)]"
+                  }`}
+                >
+                  {selectedIds.has(job.id) && <Check className="h-3 w-3" />}
+                </button>
+
+                <div className="flex flex-1 items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <h3 className="font-semibold">{titleCase(job.title)}</h3>
                   <p className="text-sm text-[var(--muted)]">
@@ -351,6 +528,7 @@ export function JobList({
                       ))}
                     </div>
                   )}
+                </div>
                 </div>
               </div>
             </div>

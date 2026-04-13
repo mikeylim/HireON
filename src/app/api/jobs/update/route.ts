@@ -3,28 +3,29 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { getAuthUser } from "@/lib/supabase/auth";
 
 // PATCH /api/jobs/update
-// Body: { id: string, updates: { status?, notes?, ... } }
+// Body: { id: string, updates } for single, or { ids: string[], updates } for bulk
 export async function PATCH(req: NextRequest) {
   try {
     const user = await getAuthUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { id, updates } = await req.json();
+    const body = await req.json();
+    const { id, ids, updates } = body;
+    const targetIds: string[] = ids ?? (id ? [id] : []);
 
-    if (!id) {
+    if (targetIds.length === 0) {
       return NextResponse.json(
-        { error: "Job ID is required." },
+        { error: "At least one job ID is required." },
         { status: 400 }
       );
     }
 
     const supabase = await createServerSupabase();
-    const { data, error } = await supabase
-      .from("jobs")
-      .update(updates)
-      .eq("id", id)
-      .select()
-      .single();
+    const query = supabase.from("jobs").update(updates).in("id", targetIds).select();
+    // For single-job updates, return just the one row to keep backward compatibility
+    const { data, error } = targetIds.length === 1
+      ? await query.single()
+      : await query;
 
     if (error) {
       return NextResponse.json(
