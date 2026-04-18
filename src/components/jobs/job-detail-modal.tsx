@@ -257,8 +257,14 @@ export function JobDetailModal({
     archivedDate !== (job.archived_date?.slice(0, 10) ?? "");
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:p-4">
-      <div className="relative max-h-[95vh] w-full overflow-y-auto rounded-t-2xl border border-[var(--sidebar-border)] bg-[var(--background)] p-4 shadow-xl sm:max-w-2xl sm:rounded-2xl sm:p-6">
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:p-4"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative max-h-[95vh] w-full overflow-y-auto rounded-t-2xl border border-[var(--sidebar-border)] bg-[var(--background)] p-4 shadow-xl sm:max-w-2xl sm:rounded-2xl sm:p-6"
+      >
         {/* Close */}
         <button
           onClick={onClose}
