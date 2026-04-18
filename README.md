@@ -1,6 +1,6 @@
 # HireON
 
-Job search dashboard for Ontario/GTA/Toronto. Scrapes postings from multiple free sources, scores them with Gemini AI for relevance, and lets you track your entire application pipeline in one place.
+Job search dashboard for Ontario/GTA/Toronto. Scrapes postings from multiple open sources, scores them with Gemini AI for relevance, and lets you track your entire application pipeline in one place.
 
 ## Preview
 
