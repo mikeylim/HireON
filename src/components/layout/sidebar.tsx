@@ -15,6 +15,7 @@ import {
   PanelLeftOpen,
   PlusCircle,
   Trophy,
+  BarChart3,
   Sun,
   Moon,
   Monitor,
@@ -33,6 +34,7 @@ const menuItems = [
   { label: "Interviews", href: "/dashboard/interviews", icon: CalendarClock },
   { label: "Offers", href: "/dashboard/offers", icon: Trophy },
   { label: "Archived", href: "/dashboard/archived", icon: XCircle },
+  { label: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
   { label: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
 

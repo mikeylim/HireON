@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import type { Job, JobStatus } from "@/lib/types/job";
 import { titleCase } from "@/lib/utils";
+import { ApplicationTimeline } from "./application-timeline";
 
 const STATUS_ACTIONS: {
   value: JobStatus;
@@ -726,24 +727,9 @@ export function JobDetailModal({
           Save Changes
         </button>
 
-        {/* Timeline dates */}
-        <div className="mt-5 flex flex-wrap gap-x-6 gap-y-1 text-xs text-[var(--muted)]">
-          {job.posted_at && (
-            <span>Posted: {new Date(job.posted_at).toLocaleDateString()}</span>
-          )}
-          {job.deadline && (
-            <span>Deadline: {new Date(job.deadline).toLocaleDateString()}</span>
-          )}
-          {job.applied_date && (
-            <span>Applied: {new Date(job.applied_date).toLocaleDateString()}</span>
-          )}
-          {job.interview_date && (
-            <span>Interview: {new Date(job.interview_date).toLocaleDateString()}</span>
-          )}
-          {job.offer_date && (
-            <span>Offer: {new Date(job.offer_date).toLocaleDateString()}</span>
-          )}
-          <span>Added: {new Date(job.scraped_at).toLocaleDateString()}</span>
+        {/* Application timeline */}
+        <div className="mt-5">
+          <ApplicationTimeline job={job} />
         </div>
 
         {/* Delete */}
