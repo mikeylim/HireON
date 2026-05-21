@@ -6,8 +6,14 @@ alter table jobs add column if not exists user_id uuid references auth.users(id)
 -- replacing YOUR_USER_ID with your actual auth user ID:
 -- UPDATE jobs SET user_id = 'YOUR_USER_ID' WHERE user_id IS NULL;
 
--- Enable Row Level Security
+-- Enable Row Level Security (safe to call multiple times)
 alter table jobs enable row level security;
+
+-- Drop existing policies first so this migration is idempotent
+drop policy if exists "Users can view their own jobs" on jobs;
+drop policy if exists "Users can insert their own jobs" on jobs;
+drop policy if exists "Users can update their own jobs" on jobs;
+drop policy if exists "Users can delete their own jobs" on jobs;
 
 -- Users can only see their own jobs
 create policy "Users can view their own jobs"
