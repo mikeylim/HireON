@@ -86,7 +86,7 @@ export default function LoginPage() {
             style={{ width: "200px", height: "auto" }}
           />
           <p className="mt-2 text-sm text-[var(--muted)]">
-            Ontario job search All-in-one dashboard
+            All-in-One Ontario job search dashboard
           </p>
         </div>
 
