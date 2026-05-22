@@ -35,7 +35,10 @@ export async function POST(req: NextRequest) {
     // ── Branch 1: User pasted job description text directly ──
     // This bypasses the JS-rendering problem entirely since we don't need to fetch.
     if (text && typeof text === "string" && text.trim().length > 0) {
-      const cleanedText = text.trim();
+      // Normalize whitespace — pasted text often has lots of blank lines
+      // and inconsistent spacing that wastes tokens and dilutes the signal.
+      // Same treatment we apply to scraped HTML in the URL branch.
+      const cleanedText = text.replace(/\s+/g, " ").trim();
 
       if (cleanedText.length < 100) {
         return NextResponse.json(

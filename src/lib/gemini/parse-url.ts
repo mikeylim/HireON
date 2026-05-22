@@ -119,7 +119,9 @@ ${trimmed}`;
     throw new Error("Couldn't reach AI service. Please try again.");
   }
 
-  const text: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+  const candidate = data?.candidates?.[0];
+  const text: string = candidate?.content?.parts?.[0]?.text ?? "{}";
+  const finishReason: string | undefined = candidate?.finishReason;
 
   // Strip markdown fences just in case (defensive — responseMimeType should prevent this)
   const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
@@ -127,9 +129,21 @@ ${trimmed}`;
   let parsed: ParsedJob;
   try {
     parsed = JSON.parse(cleaned);
-  } catch (err) {
-    console.error("Gemini returned invalid JSON:", cleaned);
-    throw new Error("Could not parse AI response. Please fill the form manually.");
+  } catch {
+    // Log everything we know so the developer can diagnose root cause
+    console.error("[parse-url] Gemini returned invalid JSON.");
+    console.error("[parse-url] finishReason:", finishReason);
+    console.error("[parse-url] raw text length:", text.length);
+    console.error("[parse-url] raw text (first 500):", text.substring(0, 500));
+    console.error("[parse-url] raw text (last 500):", text.substring(Math.max(0, text.length - 500)));
+
+    // Specific message for the most common failure: output truncated mid-JSON
+    if (finishReason === "MAX_TOKENS") {
+      throw new Error(
+        "AI response was cut off — content was too long. Try pasting a shorter description with only the essentials."
+      );
+    }
+    throw new Error("AI returned an unexpected response. Please try again or fill the form manually.");
   }
 
   return parsed;
