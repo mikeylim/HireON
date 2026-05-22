@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Plus, Sparkles, AlertCircle } from "lucide-react";
 import type { JobStatus, JobType, WorkMode } from "@/lib/types/job";
 
 // All the fields the user can fill in when adding a job manually
@@ -88,8 +88,106 @@ export default function AddJobPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // AI auto-fill state
+  const [parseUrl, setParseUrl] = useState("");
+  const [parseText, setParseText] = useState("");
+  const [parseMode, setParseMode] = useState<"url" | "text">("url");
+  const [parsing, setParsing] = useState(false);
+  const [parseError, setParseError] = useState<string | null>(null);
+  const [parseWarning, setParseWarning] = useState<string | null>(null);
+  // Tracks which fields were filled by AI — used for showing the "AI" badge.
+  // Once a user edits a field, we remove it from this set so the badge disappears.
+  const [aiFilled, setAiFilled] = useState<Set<keyof FormData>>(new Set());
+
   function update(field: keyof FormData, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
+    // User just modified this field — it's no longer "AI-filled"
+    setAiFilled((prev) => {
+      if (!prev.has(field)) return prev;
+      const next = new Set(prev);
+      next.delete(field);
+      return next;
+    });
+  }
+
+  // Handle AI parse: send URL to server, fill in the form with returned data
+  async function handleParseUrl() {
+    // Validate input based on current mode
+    if (parseMode === "url" && !parseUrl.trim()) {
+      setParseError("Paste a job posting URL first.");
+      return;
+    }
+    if (parseMode === "text" && !parseText.trim()) {
+      setParseError("Paste the job description text first.");
+      return;
+    }
+
+    setParsing(true);
+    setParseError(null);
+    setParseWarning(null);
+
+    try {
+      // Send either url or text depending on mode
+      const payload =
+        parseMode === "url"
+          ? { url: parseUrl.trim() }
+          : { text: parseText.trim() };
+
+      const res = await fetch("/api/jobs/parse-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await res.json();
+
+      if (!res.ok || result.error) {
+        setParseError(result.error ?? "Failed to parse this URL.");
+        return;
+      }
+
+      const data = result.data;
+      const filledFields = new Set<keyof FormData>();
+
+      // Build the new form state, only overwriting fields that came back non-null
+      setForm((prev) => {
+        const next = { ...prev };
+
+        // If user provided a URL, save it. In text mode, leave URL field for user to fill in.
+        if (parseMode === "url") {
+          next.url = parseUrl.trim();
+          filledFields.add("url");
+        }
+
+        if (data.title) { next.title = data.title; filledFields.add("title"); }
+        if (data.company) { next.company = data.company; filledFields.add("company"); }
+        if (data.location) { next.location = data.location; filledFields.add("location"); }
+        if (data.description) { next.description = data.description; filledFields.add("description"); }
+        if (data.job_type) { next.job_type = data.job_type; filledFields.add("job_type"); }
+        if (data.work_mode) { next.work_mode = data.work_mode; filledFields.add("work_mode"); }
+        if (data.salary_min !== null) { next.salary_min = String(data.salary_min); filledFields.add("salary_min"); }
+        if (data.salary_max !== null) { next.salary_max = String(data.salary_max); filledFields.add("salary_max"); }
+        if (data.salary_period) { next.salary_period = data.salary_period; filledFields.add("salary_period"); }
+        if (data.deadline) { next.deadline = data.deadline; filledFields.add("deadline"); }
+        if (data.duration_value !== null) {
+          next.duration_value = String(data.duration_value);
+          next.has_duration = true;
+          filledFields.add("duration_value");
+          filledFields.add("has_duration");
+        }
+        if (data.duration_unit) { next.duration_unit = data.duration_unit; filledFields.add("duration_unit"); }
+        if (data.notes) { next.notes = data.notes; filledFields.add("notes"); }
+
+        return next;
+      });
+
+      setAiFilled(filledFields);
+      if (result.warning) setParseWarning(result.warning);
+    } catch {
+      setParseError("Something went wrong. Check your connection and try again.");
+    } finally {
+      setParsing(false);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -171,6 +269,18 @@ export default function AddJobPage() {
     "w-full rounded-lg border border-[var(--sidebar-border)] bg-[var(--accent)] px-3 py-2 text-sm outline-none placeholder:text-[var(--muted)] focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]";
   const labelClass = "block text-sm font-medium mb-1";
 
+  // Small badge shown next to labels of fields that were auto-filled by AI
+  // Disappears once the user edits the field (handled in `update()`)
+  function AIBadge({ field }: { field: keyof FormData }) {
+    if (!aiFilled.has(field)) return null;
+    return (
+      <span className="ml-2 inline-flex items-center gap-0.5 rounded-full bg-[var(--primary)]/15 px-1.5 py-0.5 text-[10px] font-bold text-[var(--primary)]">
+        <Sparkles className="h-2.5 w-2.5" />
+        AI
+      </span>
+    );
+  }
+
   return (
     <div className="min-w-0 space-y-6 overflow-hidden">
       <div>
@@ -178,6 +288,123 @@ export default function AddJobPage() {
         <p className="text-sm text-[var(--muted)]">
           Track a job you found on Indeed, Glassdoor, a university portal, or anywhere else.
         </p>
+      </div>
+
+      {/* ── AI Auto-fill ── */}
+      <div className="rounded-xl border border-[var(--primary)]/30 bg-blue-50/50 p-5 space-y-3 dark:bg-blue-950/20">
+        <div className="flex items-start gap-3">
+          <Sparkles className="h-5 w-5 shrink-0 text-[var(--primary)]" />
+          <div className="flex-1">
+            <h2 className="text-sm font-semibold">Auto-fill with AI</h2>
+            <p className="mt-0.5 text-xs text-[var(--muted)]">
+              Paste a job posting URL, or if that doesn&apos;t work for the site, paste the description text directly.{" "}
+              <span className="font-medium">Always review before saving.</span>
+            </p>
+          </div>
+        </div>
+
+        {/* Tab switcher */}
+        <div className="inline-flex rounded-lg border border-[var(--sidebar-border)] bg-[var(--background)] p-0.5">
+          <button
+            type="button"
+            onClick={() => { setParseMode("url"); setParseError(null); }}
+            className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+              parseMode === "url"
+                ? "bg-[var(--primary)] text-white"
+                : "text-[var(--muted)] hover:text-[var(--foreground)]"
+            }`}
+          >
+            From URL
+          </button>
+          <button
+            type="button"
+            onClick={() => { setParseMode("text"); setParseError(null); }}
+            className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+              parseMode === "text"
+                ? "bg-[var(--primary)] text-white"
+                : "text-[var(--muted)] hover:text-[var(--foreground)]"
+            }`}
+          >
+            From Pasted Text
+          </button>
+        </div>
+
+        {parseMode === "url" ? (
+          <div className="flex gap-2">
+            <input
+              type="url"
+              value={parseUrl}
+              onChange={(e) => setParseUrl(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (!parsing && parseUrl.trim()) handleParseUrl();
+                }
+              }}
+              placeholder="https://company.com/careers/job-id"
+              className="flex-1 rounded-lg border border-[var(--sidebar-border)] bg-[var(--background)] px-3 py-2 text-sm outline-none placeholder:text-[var(--muted)] focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]"
+            />
+            <button
+              type="button"
+              onClick={handleParseUrl}
+              disabled={parsing || !parseUrl.trim()}
+              className="flex items-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--primary-hover)] disabled:opacity-50"
+            >
+              {parsing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
+              {parsing ? "Analyzing..." : "Auto-fill"}
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <textarea
+              value={parseText}
+              onChange={(e) => setParseText(e.target.value)}
+              placeholder="Paste the full job description here — copy the text from the job posting page (title, company, salary, deadline, responsibilities, etc.)"
+              rows={8}
+              className="w-full rounded-lg border border-[var(--sidebar-border)] bg-[var(--background)] px-3 py-2 text-sm outline-none placeholder:text-[var(--muted)] focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]"
+            />
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-[var(--muted)]">
+                {parseText.length} characters {parseText.length < 100 && parseText.length > 0 && "— paste more for better results"}
+              </p>
+              <button
+                type="button"
+                onClick={handleParseUrl}
+                disabled={parsing || parseText.trim().length < 100}
+                className="flex items-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--primary-hover)] disabled:opacity-50"
+              >
+                {parsing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4" />
+                )}
+                {parsing ? "Analyzing..." : "Auto-fill from Text"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {parseError && (
+          <div className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <p>{parseError}</p>
+          </div>
+        )}
+        {parseWarning && (
+          <div className="flex items-start gap-2 rounded-lg bg-yellow-50 px-3 py-2 text-sm text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <p>{parseWarning}</p>
+          </div>
+        )}
+        {aiFilled.size > 0 && !parseError && (
+          <p className="text-xs text-[var(--success)]">
+            Filled {aiFilled.size} field{aiFilled.size !== 1 ? "s" : ""} from the URL. Review and edit any fields marked with the AI badge below.
+          </p>
+        )}
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -189,7 +416,7 @@ export default function AddJobPage() {
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
-              <label className={labelClass}>Job Title *</label>
+              <label className={labelClass}>Job Title *<AIBadge field="title" /></label>
               <input
                 type="text"
                 value={form.title}
@@ -200,7 +427,7 @@ export default function AddJobPage() {
             </div>
 
             <div>
-              <label className={labelClass}>Company *</label>
+              <label className={labelClass}>Company *<AIBadge field="company" /></label>
               <input
                 type="text"
                 value={form.company}
@@ -211,7 +438,7 @@ export default function AddJobPage() {
             </div>
 
             <div>
-              <label className={labelClass}>Posting URL *</label>
+              <label className={labelClass}>Posting URL *<AIBadge field="url" /></label>
               <input
                 type="url"
                 value={form.url}
@@ -239,7 +466,7 @@ export default function AddJobPage() {
             </div>
 
             <div>
-              <label className={labelClass}>Location</label>
+              <label className={labelClass}>Location<AIBadge field="location" /></label>
               <input
                 type="text"
                 value={form.location}
@@ -250,7 +477,7 @@ export default function AddJobPage() {
             </div>
 
             <div>
-              <label className={labelClass}>Application Deadline</label>
+              <label className={labelClass}>Application Deadline<AIBadge field="deadline" /></label>
               <input
                 type="date"
                 value={form.deadline}
@@ -261,7 +488,7 @@ export default function AddJobPage() {
           </div>
 
           <div>
-            <label className={labelClass}>Job Description</label>
+            <label className={labelClass}>Job Description<AIBadge field="description" /></label>
             <textarea
               value={form.description}
               onChange={(e) => update("description", e.target.value)}
@@ -280,7 +507,7 @@ export default function AddJobPage() {
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div>
-              <label className={labelClass}>Job Type</label>
+              <label className={labelClass}>Job Type<AIBadge field="job_type" /></label>
               <select
                 value={form.job_type}
                 onChange={(e) => {
@@ -301,7 +528,7 @@ export default function AddJobPage() {
             </div>
 
             <div>
-              <label className={labelClass}>Work Mode</label>
+              <label className={labelClass}>Work Mode<AIBadge field="work_mode" /></label>
               <select
                 value={form.work_mode}
                 onChange={(e) => update("work_mode", e.target.value)}
@@ -378,7 +605,7 @@ export default function AddJobPage() {
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div>
-              <label className={labelClass}>Pay Period</label>
+              <label className={labelClass}>Pay Period<AIBadge field="salary_period" /></label>
               <select
                 value={form.salary_period}
                 onChange={(e) => update("salary_period", e.target.value)}
@@ -393,6 +620,7 @@ export default function AddJobPage() {
             <div>
               <label className={labelClass}>
                 Min ({form.salary_period === "hourly" ? "$/hr" : form.salary_period === "monthly" ? "$/mo" : "$/yr"})
+                <AIBadge field="salary_min" />
               </label>
               <input
                 type="number"
@@ -406,6 +634,7 @@ export default function AddJobPage() {
             <div>
               <label className={labelClass}>
                 Max ({form.salary_period === "hourly" ? "$/hr" : form.salary_period === "monthly" ? "$/mo" : "$/yr"})
+                <AIBadge field="salary_max" />
               </label>
               <input
                 type="number"
@@ -418,7 +647,7 @@ export default function AddJobPage() {
           </div>
 
           <div>
-            <label className={labelClass}>Notes</label>
+            <label className={labelClass}>Notes<AIBadge field="notes" /></label>
             <textarea
               value={form.notes}
               onChange={(e) => update("notes", e.target.value)}

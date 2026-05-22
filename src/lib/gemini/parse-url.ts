@@ -1,0 +1,136 @@
+import axios from "axios";
+
+// What we extract from a job posting URL — every field is nullable so Gemini
+// can return null when uncertain instead of hallucinating
+export interface ParsedJob {
+  title: string | null;
+  company: string | null;
+  location: string | null;
+  description: string | null;
+  job_type: "full-time" | "part-time" | "contract" | "internship" | "temporary" | null;
+  work_mode: "onsite" | "remote" | "hybrid" | null;
+  salary_min: number | null;
+  salary_max: number | null;
+  salary_period: "annual" | "monthly" | "hourly" | null;
+  deadline: string | null;       // YYYY-MM-DD
+  duration_value: number | null; // for contracts/internships
+  duration_unit: "months" | "years" | null;
+  notes: string | null;          // application tips, required docs, contact info, etc.
+}
+
+const GEMINI_URL =
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent";
+
+// Send page content to Gemini and get structured job fields back
+export async function parseJobFromContent(
+  pageContent: string,
+  sourceUrl: string
+): Promise<ParsedJob> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("GEMINI_API_KEY is not configured");
+
+  // Truncate to keep within token budget. 12000 chars (~3000 tokens) gives
+  // enough room to capture metadata that often appears below the main description
+  // (salary, deadline, application instructions) on corporate career sites.
+  const trimmed = pageContent.substring(0, 12000);
+
+  // The prompt design is the most important part of preventing hallucinations.
+  // Three guardrails: strict schema, explicit null instruction, low temperature.
+  const prompt = `You are a job posting parser. Extract structured information from the job posting content below.
+
+CRITICAL RULES — read carefully:
+1. Return ONLY valid JSON. No markdown, no commentary, no code fences.
+2. If you cannot CONFIDENTLY determine a field from the content, set it to null.
+3. NEVER guess. NEVER make up data. Better to return null than to be wrong.
+4. Description must be a 2-3 sentence summary in your own words, max 300 characters.
+5. For salary: scan the ENTIRE content for any pay information. Look for labels like
+   "Salary:", "Pay:", "Compensation:", "Pay range:", "$X - $Y", "$X/hr", etc.
+   Parse the original numbers. salary_min and salary_max should be the lower and
+   upper bounds. salary_period: "hourly" for $/hr, "monthly" for $/mo, otherwise "annual".
+6. For deadline: scan for labels like "Application Deadline:", "Apply by:",
+   "Closes:", "Closing date:". Convert dates like "05/24/2026" or "May 24, 2026"
+   to YYYY-MM-DD format. If only month/day given, assume current year.
+7. For job_type, look for "full-time", "part-time", "intern", "contract", "co-op".
+   Co-op counts as "internship".
+8. For work_mode: "remote" if fully remote, "hybrid" if mixed, "onsite" if in-person.
+9. For duration_value/unit: scan for "X-month", "X month", "X year" in the title
+   or content. Only set for contract/internship/temporary roles.
+10. For notes: extract APPLICATION-RELATED helpful info only (not the job description).
+    Examples: required documents ("Please submit transcripts"), referral program
+    mentions, application instructions ("Apply through Workday only"), contact
+    person, special requirements (work permit, security clearance), recruiter name.
+    Keep notes concise — bullet points or short lines. Max 400 chars.
+    Return null if no application-specific info is found.
+
+Schema (return JSON in EXACTLY this structure):
+{
+  "title": string | null,
+  "company": string | null,
+  "location": string | null,
+  "description": string | null,
+  "job_type": "full-time" | "part-time" | "contract" | "internship" | "temporary" | null,
+  "work_mode": "onsite" | "remote" | "hybrid" | null,
+  "salary_min": number | null,
+  "salary_max": number | null,
+  "salary_period": "annual" | "monthly" | "hourly" | null,
+  "deadline": string | null,
+  "duration_value": number | null,
+  "duration_unit": "months" | "years" | null,
+  "notes": string | null
+}
+
+Source URL: ${sourceUrl}
+
+Page content:
+${trimmed}`;
+
+  let data;
+  try {
+    const response = await axios.post(
+      `${GEMINI_URL}?key=${apiKey}`,
+      {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.05, // very low — we want deterministic extraction
+          maxOutputTokens: 4096, // generous budget for thinking models that reserve tokens
+          responseMimeType: "application/json",
+          // Disable internal "thinking" for this task — we just need structured copying,
+          // not reasoning. This avoids the thinking tokens eating into the output budget.
+          thinkingConfig: { thinkingBudget: 0 },
+        },
+      },
+      { timeout: 30000 }
+    );
+    data = response.data;
+  } catch (err) {
+    // Surface a friendlier message instead of axios's raw "Request failed with status code X"
+    if (axios.isAxiosError(err)) {
+      const status = err.response?.status;
+      if (status === 401 || status === 403) {
+        throw new Error("Gemini API key is invalid. Check GEMINI_API_KEY.");
+      }
+      if (status === 429) {
+        throw new Error("Gemini rate limit hit. Try again in a minute.");
+      }
+      if (status === 404) {
+        throw new Error("Gemini model not found. The model name may be wrong.");
+      }
+    }
+    throw new Error("Couldn't reach AI service. Please try again.");
+  }
+
+  const text: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+
+  // Strip markdown fences just in case (defensive — responseMimeType should prevent this)
+  const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+
+  let parsed: ParsedJob;
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch (err) {
+    console.error("Gemini returned invalid JSON:", cleaned);
+    throw new Error("Could not parse AI response. Please fill the form manually.");
+  }
+
+  return parsed;
+}
