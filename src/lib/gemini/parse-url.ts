@@ -148,3 +148,115 @@ ${trimmed}`;
 
   return parsed;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Description + Notes enhancement
+//
+// Adapters (Workday, Greenhouse, JSON-LD, etc.) extract structured fields but
+// the raw `description` they return is often unstructured prose mixed with
+// marketing fluff, eligibility criteria, application instructions, etc.
+//
+// This helper takes the raw description text and asks Gemini to split it into:
+//   - description: WHAT THE ROLE INVOLVES (responsibilities, duties)
+//   - notes:       APPLICATION-PROCESS info (eligibility, required docs, etc.)
+//
+// Called as a post-processing step after any adapter succeeds.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface EnhancedFields {
+  description: string | null;
+  notes: string | null;
+}
+
+export async function enhanceDescriptionAndNotes(
+  rawText: string
+): Promise<EnhancedFields> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return { description: null, notes: null };
+
+  // Decode entities, strip HTML tags, collapse whitespace
+  const cleaned = rawText
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/&nbsp;/g, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (cleaned.length < 100) {
+    // Too little text to meaningfully extract anything
+    return { description: cleaned || null, notes: null };
+  }
+
+  // Truncate to keep cost down — most postings fit
+  const trimmed = cleaned.substring(0, 8000);
+
+  const prompt = `You are given the raw text of a job posting description.
+Extract TWO independent pieces:
+
+1. "description" — a CONCISE summary of WHAT THE ROLE INVOLVES:
+   the actual duties, responsibilities, and what the candidate will do day-to-day.
+   - Look for sections like "Responsibilities", "What will you do?", "Your role", etc.
+   - Use bullet points if the source uses them (with "• " prefix on each).
+   - Skip company marketing/background ("Acme is a leading...").
+   - Skip required skills/qualifications (those go elsewhere).
+   - Skip application instructions.
+   - Max 600 characters.
+
+2. "notes" — APPLICATION-PROCESS info that helps the applicant prepare:
+   - Eligibility requirements ("must be returning student", "Canadian citizen only")
+   - Required documents ("submit transcripts", "include cover letter")
+   - Special instructions ("apply through Workday only", "contact the recruiter")
+   - Contact info (recruiter name, email)
+   - Posting IDs / Requisition IDs
+   - Anything procedural that's NOT part of the actual job duties
+   - Max 500 characters.
+   - Return null if no such info is found.
+
+CRITICAL:
+- Return ONLY valid JSON in this exact shape:
+  { "description": string | null, "notes": string | null }
+- No markdown. No code fences. No commentary.
+- Extract what's actually in the source. Do not paraphrase aggressively or invent details.
+- If you can't confidently extract a field, set it to null.
+
+Raw text:
+${trimmed}`;
+
+  try {
+    const response = await axios.post(
+      `${GEMINI_URL}?key=${apiKey}`,
+      {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 2048,
+          responseMimeType: "application/json",
+          thinkingConfig: { thinkingBudget: 0 },
+        },
+      },
+      { timeout: 30000 }
+    );
+
+    const text: string = response.data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+    const stripped = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    const parsed = JSON.parse(stripped);
+
+    return {
+      description: typeof parsed.description === "string" && parsed.description.trim()
+        ? parsed.description.trim()
+        : null,
+      notes: typeof parsed.notes === "string" && parsed.notes.trim()
+        ? parsed.notes.trim()
+        : null,
+    };
+  } catch (err) {
+    // Enhancement is best-effort — if Gemini fails, return nulls and let the
+    // adapter's original description stand
+    console.error("[enhanceDescriptionAndNotes] failed:", err instanceof Error ? err.message : err);
+    return { description: null, notes: null };
+  }
+}

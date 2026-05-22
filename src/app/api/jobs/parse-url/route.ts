@@ -2,8 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
 import * as cheerio from "cheerio";
 import { getAuthUser } from "@/lib/supabase/auth";
-import { parseJobFromContent } from "@/lib/gemini/parse-url";
+import { parseJobFromContent, enhanceDescriptionAndNotes } from "@/lib/gemini/parse-url";
 import { tryAdapters } from "@/lib/ats";
+
+// Description length cap stored in DB after Gemini enhancement (or as a fallback
+// when enhancement returns nothing). Long enough for the modal display.
+const DESCRIPTION_MAX = 600;
+const NOTES_MAX = 500;
 
 // Sites known to block server-side scraping — we'll warn the user about these
 const HARD_TO_PARSE_DOMAINS = [
@@ -105,6 +110,27 @@ export async function POST(req: NextRequest) {
         if (guessedCompany) {
           parsed.company = guessedCompany.charAt(0).toUpperCase() + guessedCompany.slice(1);
         }
+      }
+
+      // Enhance description + notes with Gemini.
+      // Adapters give us the raw description text; Gemini splits it into
+      // "what the role involves" (description) and "application-process info" (notes).
+      // Only worth running when the source has enough text — short blurbs
+      // are usually already focused or have no structure to extract from.
+      if (parsed.description && parsed.description.length >= 500) {
+        const enhanced = await enhanceDescriptionAndNotes(parsed.description);
+        if (enhanced.description) {
+          parsed.description = enhanced.description.substring(0, DESCRIPTION_MAX);
+        } else {
+          // Fallback: cap the adapter's raw description to a reasonable length
+          parsed.description = parsed.description.substring(0, DESCRIPTION_MAX);
+        }
+        if (enhanced.notes) {
+          parsed.notes = enhanced.notes.substring(0, NOTES_MAX);
+        }
+      } else if (parsed.description) {
+        // Short description — keep as-is, just cap defensively
+        parsed.description = parsed.description.substring(0, DESCRIPTION_MAX);
       }
 
       console.log(

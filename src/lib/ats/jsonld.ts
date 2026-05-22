@@ -96,7 +96,11 @@ function mapToJob(job: JsonLdJobPosting): ParsedJob {
     if (parts.length > 0) location = parts.join(", ");
   }
 
-  // Description — HTML-decode entities, strip tags, remove metadata prefix, trim
+  // Description — HTML-decode entities, strip tags, remove metadata prefix.
+  // We DON'T truncate here. The route post-processes with Gemini to extract
+  // the responsibilities section and separate out application notes, then
+  // applies length limits. Truncating to 300 chars here would discard the
+  // most important content (responsibilities usually come after marketing fluff).
   const rawDesc = job.description ?? "";
   const description = rawDesc
     ? stripMetadataPrefix(
@@ -104,7 +108,7 @@ function mapToJob(job: JsonLdJobPosting): ParsedJob {
           .replace(/<[^>]+>/g, " ")
           .replace(/\s+/g, " ")
           .trim()
-      ).substring(0, 300)
+      ).substring(0, 8000) // generous cap for Gemini context
     : null;
 
   // Employment type → our job_type enum
@@ -179,12 +183,22 @@ function mapToJob(job: JsonLdJobPosting): ParsedJob {
   }
   if (!deadline) {
     const decoded = decodeEntities(rawDesc).replace(/<[^>]+>/g, " ");
-    // Match "Application Deadline: 05/24/2026" or "Apply by May 24, 2026"
+    // Match common date formats after a deadline label:
+    //   MM/DD/YYYY  → "05/24/2026"
+    //   Month D, YYYY → "May 24, 2026"
+    //   YYYY-MM-DD  → "2026-05-23" (ISO, used by RBC and many systems)
     const match = decoded.match(
-      /(?:application deadline|apply by|closing date|closes)[:\s]+(\d{1,2}\/\d{1,2}\/\d{4}|\w+ \d{1,2},?\s*\d{4})/i
+      /(?:application deadline|apply by|closing date|closes)[:\s]+(\d{1,2}\/\d{1,2}\/\d{4}|\w+ \d{1,2},?\s*\d{4}|\d{4}-\d{2}-\d{2})/i
     );
     if (match) {
-      const d = new Date(match[1]);
+      const raw = match[1];
+      // For ISO YYYY-MM-DD strings, build the date in local time to avoid
+      // the timezone-shift bug (e.g. parsing "2026-05-23" as UTC midnight
+      // would display as May 22 in EDT).
+      const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      const d = iso
+        ? new Date(parseInt(iso[1]), parseInt(iso[2]) - 1, parseInt(iso[3]))
+        : new Date(raw);
       if (!isNaN(d.getTime())) deadline = d.toISOString().substring(0, 10);
     }
   }
@@ -291,6 +305,28 @@ function stripMetadataPrefix(text: string): string {
 
     cleaned = afterLabel.slice(endIdx).trim();
   }
+
+  // Final pass — strip common section header prefixes that appear without
+  // a colon. These differ from metadata labels in that they have no value;
+  // they're just titles announcing the prose section that follows.
+  // Example: RBC's description starts with "Job Description Looking to start..."
+  const SECTION_HEADERS = [
+    "Job Description",
+    "Position Description",
+    "Role Description",
+    "About the Role",
+    "About the Position",
+    "About this Role",
+    "About this Position",
+    "About the Job",
+    "Description",
+    "Overview",
+    "Position Summary",
+    "Job Summary",
+    "Role Summary",
+  ];
+  const headerRegex = new RegExp(`^(${SECTION_HEADERS.join("|")})\\s*:?\\s+`, "i");
+  cleaned = cleaned.replace(headerRegex, "").trim();
 
   return cleaned;
 }
