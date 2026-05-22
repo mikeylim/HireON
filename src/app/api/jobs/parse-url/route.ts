@@ -3,6 +3,7 @@ import axios from "axios";
 import * as cheerio from "cheerio";
 import { getAuthUser } from "@/lib/supabase/auth";
 import { parseJobFromContent } from "@/lib/gemini/parse-url";
+import { tryAdapters } from "@/lib/ats";
 
 // Sites known to block server-side scraping — we'll warn the user about these
 const HARD_TO_PARSE_DOMAINS = [
@@ -86,6 +87,32 @@ export async function POST(req: NextRequest) {
     const hostname = parsedUrl.hostname.toLowerCase();
     const isHardToParse = HARD_TO_PARSE_DOMAINS.some((d) => hostname.includes(d));
 
+    // ── Branch 2a: Try platform-specific ATS adapters first ──
+    // We try Workday → JSON-LD (universal) in sequence. If any succeeds with
+    // real data, we use it and skip the whole scraping + Gemini pipeline.
+    // Much more reliable than scraping JS-rendered pages.
+    const adapterResult = await tryAdapters(parsedUrl);
+    if (adapterResult) {
+      const parsed = adapterResult.data;
+
+      // Fill in company from hostname if the adapter didn't set it
+      if (!parsed.company) {
+        const hostParts = hostname.split(".");
+        const guessedCompany = hostParts[hostParts.length - 2];
+        if (guessedCompany) {
+          parsed.company = guessedCompany.charAt(0).toUpperCase() + guessedCompany.slice(1);
+        }
+      }
+
+      console.log(
+        `[parse-url] ${adapterResult.adapterName} adapter succeeded:`,
+        JSON.stringify(parsed, null, 2)
+      );
+      return NextResponse.json({ data: parsed, warning: null });
+    }
+    console.log(`[parse-url] No adapter succeeded for ${url}, falling back to scraping`);
+
+    // ── Branch 2b: Standard HTML fetch + Cheerio + Gemini ──
     // Fetch the HTML — polite User-Agent, reasonable timeout
     let html: string;
     try {
