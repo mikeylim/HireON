@@ -1,39 +1,65 @@
 "use client";
 
 import {
-  Plus,
   Bookmark,
   Send,
   CalendarClock,
   Trophy,
   XCircle,
   Archive,
+  X,
+  PlusCircle,
 } from "lucide-react";
 import type { Job } from "@/lib/types/job";
+import { parseDate } from "@/lib/utils";
 
-// Each event in the timeline — only shown if the job has that date
+// Scraper sources that have nicer display labels than their internal keys
+const SCRAPER_LABELS: Record<string, string> = {
+  jobbank: "Job Bank",
+  adzuna: "Adzuna",
+  jooble: "Jooble",
+  remotive: "Remotive",
+};
+
+// Field names that map to clearable DB columns. Events with a `field` get
+// a small × button that calls back to the parent modal to clear that date.
+export type ClearableField =
+  | "deadline"
+  | "applied_date"
+  | "interview_date"
+  | "offer_date"
+  | "rejected_date"
+  | "archived_date";
+
 interface TimelineEvent {
   label: string;
   date: string;
   icon: typeof Bookmark;
   color: string;
   ringColor: string;
+  // System-set events (Added, Saved) don't have a field and can't be deleted.
+  // User-controlled events (Applied, Interview, etc.) do.
+  field?: ClearableField;
 }
 
-// Build a list of events from the job, in chronological order
 function buildEvents(job: Job): TimelineEvent[] {
   const events: TimelineEvent[] = [];
 
-  // Every job has scraped_at — this is the "first seen" moment
+  // First event — "when this job entered HireON". Label depends on how:
+  //   - Scraper sources get "Saved from Job Bank" (or Adzuna, etc.)
+  //   - Anything else (Indeed, LinkedIn, company site, etc.) is "Added manually"
+  // This replaces the old redundant Added + Saved pair, since both timestamps
+  // were the same moment and one of them ("Saved") could be misleading
+  // if the user skipped saved state via the Add Job form.
+  const scraperLabel = SCRAPER_LABELS[job.source];
   events.push({
-    label: "Added",
-    date: job.scraped_at,
-    icon: Plus,
+    label: scraperLabel ? `Saved from ${scraperLabel}` : "Added manually",
+    date: job.created_at,
+    icon: scraperLabel ? Bookmark : PlusCircle,
     color: "text-[var(--muted)]",
     ringColor: "ring-[var(--sidebar-border)]",
   });
 
-  // Job posting's own deadline — shown if provided
   if (job.deadline) {
     events.push({
       label: "Deadline",
@@ -41,19 +67,7 @@ function buildEvents(job: Job): TimelineEvent[] {
       icon: CalendarClock,
       color: "text-[var(--warning)]",
       ringColor: "ring-yellow-400 dark:ring-yellow-600",
-    });
-  }
-
-  // We treat "saved" status as having happened at created_at
-  // since we don't track a separate saved_date. Skip it if the job is "new"
-  // to avoid duplication with "Added"
-  if (job.status !== "new") {
-    events.push({
-      label: "Saved",
-      date: job.created_at,
-      icon: Bookmark,
-      color: "text-[var(--warning)]",
-      ringColor: "ring-yellow-400 dark:ring-yellow-600",
+      field: "deadline",
     });
   }
 
@@ -64,6 +78,7 @@ function buildEvents(job: Job): TimelineEvent[] {
       icon: Send,
       color: "text-[var(--primary)]",
       ringColor: "ring-blue-400 dark:ring-blue-600",
+      field: "applied_date",
     });
   }
 
@@ -74,6 +89,7 @@ function buildEvents(job: Job): TimelineEvent[] {
       icon: CalendarClock,
       color: "text-purple-500",
       ringColor: "ring-purple-400 dark:ring-purple-600",
+      field: "interview_date",
     });
   }
 
@@ -84,6 +100,7 @@ function buildEvents(job: Job): TimelineEvent[] {
       icon: Trophy,
       color: "text-[var(--success)]",
       ringColor: "ring-green-400 dark:ring-green-600",
+      field: "offer_date",
     });
   }
 
@@ -94,6 +111,7 @@ function buildEvents(job: Job): TimelineEvent[] {
       icon: XCircle,
       color: "text-[var(--destructive)]",
       ringColor: "ring-red-400 dark:ring-red-600",
+      field: "rejected_date",
     });
   }
 
@@ -104,17 +122,21 @@ function buildEvents(job: Job): TimelineEvent[] {
       icon: Archive,
       color: "text-[var(--muted)]",
       ringColor: "ring-gray-400 dark:ring-gray-600",
+      field: "archived_date",
     });
   }
 
-  // Sort ascending so the earliest event is at the top
   return events.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 }
 
-// Format date as "Apr 5, 2026" or "Apr 5, 2026 at 2:30 PM" if it has a time
 function formatDate(iso: string): string {
-  const d = new Date(iso);
-  const hasTime = iso.includes("T") && d.getHours() + d.getMinutes() > 0;
+  // parseDate handles the calendar-date vs real-timestamp distinction safely
+  const d = parseDate(iso);
+  if (!d) return iso;
+  // Only show time if the original string carries a meaningful time
+  // (not just date-only or UTC-midnight). After parseDate, a calendar-date
+  // value will have hours/minutes of 0, so this check still works.
+  const hasTime = iso.includes("T") && (d.getHours() + d.getMinutes() > 0);
   return d.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
@@ -123,9 +145,16 @@ function formatDate(iso: string): string {
   });
 }
 
-export function ApplicationTimeline({ job }: { job: Job }) {
-  const events = buildEvents(job);
+interface Props {
+  job: Job;
+  // When user clicks × on an event, parent receives the field name and is
+  // expected to clear the corresponding local state. The modal's existing
+  // Save Changes flow then persists the cleared date as null.
+  onClearEvent?: (field: ClearableField) => void;
+}
 
+export function ApplicationTimeline({ job, onClearEvent }: Props) {
+  const events = buildEvents(job);
   if (events.length === 0) return null;
 
   return (
@@ -133,7 +162,10 @@ export function ApplicationTimeline({ job }: { job: Job }) {
       <h3 className="mb-3 text-sm font-semibold">Application Timeline</h3>
       <ol className="space-y-3">
         {events.map((event, i) => (
-          <li key={`${event.label}-${i}`} className="relative flex items-start gap-3">
+          <li
+            key={`${event.label}-${i}`}
+            className="group relative flex items-start gap-3"
+          >
             {/* Vertical connecting line — hide on the last item */}
             {i < events.length - 1 && (
               <span
@@ -154,6 +186,17 @@ export function ApplicationTimeline({ job }: { job: Job }) {
               <p className="text-sm font-medium">{event.label}</p>
               <p className="text-xs text-[var(--muted)]">{formatDate(event.date)}</p>
             </div>
+
+            {/* Delete button — only on user-controlled events */}
+            {event.field && onClearEvent && (
+              <button
+                onClick={() => onClearEvent(event.field!)}
+                title={`Remove this ${event.label.toLowerCase()} event`}
+                className="invisible mt-0.5 rounded-md p-1 text-[var(--muted)] opacity-0 transition-opacity hover:bg-[var(--accent)] hover:text-[var(--destructive)] group-hover:visible group-hover:opacity-100"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
           </li>
         ))}
       </ol>

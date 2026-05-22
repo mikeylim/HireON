@@ -16,7 +16,7 @@ import {
   CalendarRange,
 } from "lucide-react";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
-import { titleCase } from "@/lib/utils";
+import { titleCase, parseDate } from "@/lib/utils";
 import { JobDetailModal } from "@/components/jobs/job-detail-modal";
 import type { Job } from "@/lib/types/job";
 
@@ -197,9 +197,14 @@ export default function DashboardPage() {
             </h2>
           </div>
           {deadlineJobs.map((job) => {
-            const daysLeft = Math.ceil(
-              (new Date(job.deadline!).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-            );
+            // Use parseDate so date-only deadlines (e.g. "2026-05-23") aren't
+            // shifted to the previous day by timezone conversion
+            const deadlineDate = parseDate(job.deadline);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const daysLeft = deadlineDate
+              ? Math.round((deadlineDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+              : 0;
             return (
               <div
                 key={job.id}

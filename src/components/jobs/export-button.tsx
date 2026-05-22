@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Download, Loader2 } from "lucide-react";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
+import { parseDate } from "@/lib/utils";
 import type { JobStatus } from "@/lib/types/job";
 
 interface ExportButtonProps {
@@ -61,9 +62,9 @@ export function ExportButton({ statuses, filename = "hireon-jobs" }: ExportButto
         job.salary_max ?? "",
         job.relevance_score ?? "",
         job.url,
-        job.posted_at ? new Date(job.posted_at).toLocaleDateString() : "",
-        job.deadline ? new Date(job.deadline).toLocaleDateString() : "",
-        job.applied_date ? new Date(job.applied_date).toLocaleDateString() : "",
+        parseDate(job.posted_at)?.toLocaleDateString() ?? "",
+        parseDate(job.deadline)?.toLocaleDateString() ?? "",
+        parseDate(job.applied_date)?.toLocaleDateString() ?? "",
         escape(job.notes ?? ""),
       ]);
 

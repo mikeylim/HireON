@@ -318,12 +318,15 @@ export default function AllJobsPage() {
               <div className="flex items-start gap-3">
                 {/* Checkbox or "saved" indicator */}
                 {job.already_saved ? (
-                  <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border border-green-500 bg-green-500 text-white">
+                  <div
+                    className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded border border-green-500 bg-green-500 text-white"
+                    title="Already in your saved jobs"
+                  >
                     <Check className="h-3 w-3" />
                   </div>
                 ) : (
                   <div
-                    className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
+                    className={`mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
                       job.selected
                         ? "border-[var(--primary)] bg-[var(--primary)] text-white"
                         : "border-[var(--sidebar-border)]"
@@ -333,31 +336,65 @@ export default function AllJobsPage() {
                   </div>
                 )}
 
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
+                {/* Main content */}
+                <div className="flex min-w-0 flex-1 items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    {/* Title row */}
+                    <div className="flex items-center gap-2">
                       <a
                         href={job.url}
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={(e) => e.stopPropagation()}
-                        className="font-semibold hover:text-[var(--primary)] hover:underline"
+                        className="truncate font-semibold hover:text-[var(--primary)] hover:underline"
                       >
                         {titleCase(job.title)}
                       </a>
-                      <p className="text-sm text-[var(--muted)]">
-                        {job.company} · {job.location}
-                        {job.already_saved && (
-                          <span className="ml-2 inline-block rounded bg-green-100 px-1.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900 dark:text-green-300">
-                            Already saved
-                          </span>
-                        )}
-                      </p>
+                      {job.already_saved && (
+                        <span className="shrink-0 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-green-700 dark:bg-green-900 dark:text-green-300">
+                          Saved
+                        </span>
+                      )}
                     </div>
 
+                    {/* Company · Location · Job Type */}
+                    <p className="truncate text-sm text-[var(--muted)]">
+                      {job.company} <span className="opacity-50">·</span> {job.location}
+                      {job.job_type && job.job_type !== "full-time" && (
+                        <>
+                          {" "}
+                          <span className="opacity-50">·</span>{" "}
+                          <span className="capitalize">{job.job_type.replace("-", " ")}</span>
+                        </>
+                      )}
+                    </p>
+
+                    {/* Tag row */}
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      <span className="rounded-md bg-[var(--accent)] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[var(--muted)]">
+                        {job.source}
+                      </span>
+                      {job.work_mode !== "onsite" && (
+                        <span className="rounded-md bg-[var(--accent)] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[var(--muted)]">
+                          {job.work_mode}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* AI reason — italic, muted, capped */}
+                    {job.score_reason && (
+                      <p className="mt-2 line-clamp-2 text-xs italic text-[var(--muted)]">
+                        <span className="font-medium not-italic text-[var(--primary)]">AI:</span>{" "}
+                        {job.score_reason}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Right side: score + salary */}
+                  <div className="flex shrink-0 flex-col items-end gap-1.5">
                     {job.relevance_score !== null && (
                       <div
-                        className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${
+                        className={`rounded-full px-2.5 py-1 text-xs font-bold ${
                           job.relevance_score >= 70
                             ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
                             : job.relevance_score >= 40
@@ -369,25 +406,8 @@ export default function AllJobsPage() {
                         {job.relevance_score}
                       </div>
                     )}
-                  </div>
-
-                  {job.description && (
-                    <p className="mt-1 overflow-hidden truncate break-all text-xs text-[var(--muted)]">
-                      {job.description}
-                    </p>
-                  )}
-
-                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                    <span className="rounded-full bg-[var(--accent)] px-2 py-0.5 text-xs text-[var(--muted)]">
-                      {job.source}
-                    </span>
-                    {job.work_mode !== "onsite" && (
-                      <span className="rounded-full bg-[var(--accent)] px-2 py-0.5 text-xs text-[var(--muted)]">
-                        {job.work_mode}
-                      </span>
-                    )}
                     {job.salary_min && (
-                      <span className="rounded-full bg-[var(--accent)] px-2 py-0.5 text-xs text-[var(--muted)]">
+                      <span className="whitespace-nowrap rounded-full bg-[var(--accent)] px-3 py-1 text-xs font-semibold">
                         ${(job.salary_min / 1000).toFixed(0)}k
                         {job.salary_max
                           ? `–$${(job.salary_max / 1000).toFixed(0)}k`
@@ -395,11 +415,6 @@ export default function AllJobsPage() {
                       </span>
                     )}
                   </div>
-                  {job.score_reason && (
-                    <p className="mt-1 text-xs italic text-[var(--muted)]">
-                      AI: {job.score_reason}
-                    </p>
-                  )}
                 </div>
               </div>
             </div>

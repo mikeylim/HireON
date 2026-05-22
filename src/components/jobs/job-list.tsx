@@ -12,12 +12,15 @@ import {
   Check,
   Loader2,
   X,
+  StickyNote,
+  CalendarDays,
+  AlertTriangle,
 } from "lucide-react";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 import { JobDetailModal } from "./job-detail-modal";
 import { ExportButton } from "./export-button";
 import type { Job, JobStatus } from "@/lib/types/job";
-import { titleCase } from "@/lib/utils";
+import { titleCase, relativeTime, parseDate } from "@/lib/utils";
 
 const JOBS_PER_PAGE = 15;
 
@@ -248,6 +251,63 @@ export function JobList({
     }
   }
 
+  // Status-aware "context line" — surfaces the most relevant date for what
+  // page you're on. Returns { icon, text, urgent? } or null.
+  function getContextLine(job: Job): { icon: typeof CalendarDays; text: string; urgent?: boolean } | null {
+    // Upcoming deadline is the most urgent thing to show on any page
+    if (job.deadline) {
+      const days = relativeTime(job.deadline);
+      const date = parseDate(job.deadline);
+      if (days && date) {
+        // Compare at day granularity so today's deadline still counts as urgent
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (date.getTime() >= today.getTime()) {
+          return { icon: AlertTriangle, text: `Deadline ${days}`, urgent: true };
+        }
+      }
+    }
+
+    // Otherwise, show the most recent meaningful status date
+    switch (job.status) {
+      case "interview":
+        if (job.interview_date) {
+          return { icon: CalendarClock, text: `Interview ${relativeTime(job.interview_date)}` };
+        }
+        break;
+      case "offer":
+        if (job.offer_date) {
+          return { icon: CalendarDays, text: `Offer received ${relativeTime(job.offer_date)}` };
+        }
+        break;
+      case "applied":
+        if (job.applied_date) {
+          return { icon: CalendarDays, text: `Applied ${relativeTime(job.applied_date)}` };
+        }
+        break;
+      case "rejected":
+        if (job.rejected_date) {
+          return { icon: CalendarDays, text: `Rejected ${relativeTime(job.rejected_date)}` };
+        }
+        break;
+      case "archived":
+        if (job.archived_date) {
+          return { icon: CalendarDays, text: `Archived ${relativeTime(job.archived_date)}` };
+        }
+        break;
+      case "saved":
+      case "new":
+        // Fall through to scraped_at as the default "when did this enter your list"
+        break;
+    }
+
+    // Default: when was this added to your list
+    if (job.scraped_at) {
+      return { icon: CalendarDays, text: `Added ${relativeTime(job.scraped_at)}` };
+    }
+    return null;
+  }
+
   const sortOptions: { field: SortField; label: string }[] = [
     { field: "scraped_at", label: "Date Added" },
     { field: "relevance_score", label: "AI Score" },
@@ -408,7 +468,9 @@ export function JobList({
         <p className="py-8 text-center text-sm text-[var(--muted)]">Loading...</p>
       ) : jobs.length > 0 ? (
         <div className="space-y-3">
-          {jobs.map((job) => (
+          {jobs.map((job) => {
+            const ctx = getContextLine(job);
+            return (
             <div
               key={job.id}
               onClick={() => setSelectedJob(job)}
@@ -423,7 +485,7 @@ export function JobList({
               }`}
             >
               <div className="flex items-start gap-3">
-                {/* Selection checkbox — clicking doesn't open the modal */}
+                {/* Selection checkbox */}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -434,105 +496,132 @@ export function JobList({
                       ? "border-[var(--primary)] bg-[var(--primary)] text-white"
                       : "border-[var(--sidebar-border)] hover:border-[var(--primary)]"
                   }`}
+                  aria-label="Select job"
                 >
                   {selectedIds.has(job.id) && <Check className="h-3 w-3" />}
                 </button>
 
-                <div className="flex flex-1 items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <h3 className="font-semibold">{titleCase(job.title)}</h3>
-                  <p className="text-sm text-[var(--muted)]">
-                    {job.company} · {job.location}
-                  </p>
-                  {job.description && (
-                    <p className="mt-1 overflow-hidden truncate break-all text-xs text-[var(--muted)]">
-                      {job.description}
+                {/* Main content */}
+                <div className="flex min-w-0 flex-1 items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    {/* Title row with notes icon */}
+                    <div className="flex items-center gap-2">
+                      <h3 className="truncate font-semibold">{titleCase(job.title)}</h3>
+                      {job.notes && (
+                        <StickyNote
+                          className="h-3.5 w-3.5 shrink-0 text-[var(--muted)]"
+                          aria-label="Has notes"
+                        />
+                      )}
+                    </div>
+
+                    {/* Company · Location · Job Type */}
+                    <p className="truncate text-sm text-[var(--muted)]">
+                      {job.company} <span className="opacity-50">·</span> {job.location}
+                      {job.job_type && job.job_type !== "full-time" && (
+                        <>
+                          {" "}
+                          <span className="opacity-50">·</span>{" "}
+                          <span className="capitalize">{job.job_type.replace("-", " ")}</span>
+                        </>
+                      )}
                     </p>
-                  )}
-                  <div className="mt-1.5 flex flex-wrap gap-1.5">
-                    <span className="rounded-full bg-[var(--accent)] px-2 py-0.5 text-xs text-[var(--muted)]">
-                      {job.source}
-                    </span>
-                    {job.work_mode && job.work_mode !== "onsite" && (
-                      <span className="rounded-full bg-[var(--accent)] px-2 py-0.5 text-xs text-[var(--muted)]">
-                        {job.work_mode}
+
+                    {/* Tag row — source, work mode, status (for multi-status pages), reasons */}
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      <span className="rounded-md bg-[var(--accent)] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[var(--muted)]">
+                        {job.source}
                       </span>
-                    )}
-                    {/* Show status badge when the page lists multiple statuses */}
-                    {statuses.length > 1 && (
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                          job.status === "rejected"
-                            ? "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300"
-                            : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"
+                      {job.work_mode && job.work_mode !== "onsite" && (
+                        <span className="rounded-md bg-[var(--accent)] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[var(--muted)]">
+                          {job.work_mode}
+                        </span>
+                      )}
+                      {statuses.length > 1 && (
+                        <span
+                          className={`rounded-md px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
+                            job.status === "rejected"
+                              ? "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300"
+                              : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"
+                          }`}
+                        >
+                          {job.status}
+                        </span>
+                      )}
+                      {job.status === "rejected" && job.rejection_reason && (
+                        <span className="rounded-md bg-red-50 px-1.5 py-0.5 text-[10px] text-red-600 dark:bg-red-950 dark:text-red-400">
+                          {job.rejection_reason.replace(/_/g, " ")}
+                        </span>
+                      )}
+                      {job.status === "archived" && job.archive_reason && (
+                        <span className="rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+                          {job.archive_reason.replace(/_/g, " ")}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Context line — most relevant date for the current page/status */}
+                    {ctx && (
+                      <p
+                        className={`mt-2 flex items-center gap-1.5 text-xs ${
+                          ctx.urgent
+                            ? "font-medium text-[var(--warning)]"
+                            : "text-[var(--muted)]"
                         }`}
                       >
-                        {job.status}
-                      </span>
-                    )}
-                    {/* Show reason for rejected/archived jobs */}
-                    {job.status === "rejected" && job.rejection_reason && (
-                      <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs text-red-600 dark:bg-red-950 dark:text-red-400">
-                        {job.rejection_reason.replace(/_/g, " ")}
-                      </span>
-                    )}
-                    {job.status === "archived" && job.archive_reason && (
-                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600 dark:bg-gray-800 dark:text-gray-400">
-                        {job.archive_reason.replace(/_/g, " ")}
-                      </span>
-                    )}
-                    {job.notes && (
-                      <span className="rounded-full bg-[var(--accent)] px-2 py-0.5 text-xs text-[var(--muted)]">
-                        has notes
-                      </span>
+                        <ctx.icon className="h-3.5 w-3.5" />
+                        {ctx.text}
+                      </p>
                     )}
                   </div>
-                </div>
-                <div className="flex shrink-0 flex-col items-end gap-2">
-                  <div className="flex items-center gap-2">
-                    {job.relevance_score !== null && (
-                      <span
-                        className={`rounded-full px-2.5 py-1 text-xs font-bold ${
-                          job.relevance_score >= 70
-                            ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                            : job.relevance_score >= 40
-                              ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
-                              : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+
+                  {/* Right side: score + salary + quick actions */}
+                  <div className="flex shrink-0 flex-col items-end gap-2">
+                    <div className="flex items-center gap-2">
+                      {job.relevance_score !== null && (
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+                            job.relevance_score >= 70
+                              ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                              : job.relevance_score >= 40
+                                ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+                                : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
                           }`}
-                      >
-                        {job.relevance_score}
-                      </span>
-                    )}
-                    {job.salary_min && (
-                      <span className="whitespace-nowrap rounded-full bg-[var(--accent)] px-3 py-1 text-xs font-medium">
-                        ${(job.salary_min / 1000).toFixed(0)}k
-                        {job.salary_max
-                          ? `–$${(job.salary_max / 1000).toFixed(0)}k`
-                          : "+"}
-                      </span>
+                          title={`Relevance score: ${job.relevance_score}/100`}
+                        >
+                          {job.relevance_score}
+                        </span>
+                      )}
+                      {job.salary_min && (
+                        <span className="whitespace-nowrap rounded-full bg-[var(--accent)] px-3 py-1 text-xs font-semibold">
+                          ${(job.salary_min / 1000).toFixed(0)}k
+                          {job.salary_max
+                            ? `–$${(job.salary_max / 1000).toFixed(0)}k`
+                            : "+"}
+                        </span>
+                      )}
+                    </div>
+                    {getQuickActions(job.status).length > 0 && (
+                      <div className="flex gap-1.5">
+                        {getQuickActions(job.status).map((action) => (
+                          <button
+                            key={action.status}
+                            onClick={(e) => quickStatusChange(e, job.id, action.status)}
+                            className="flex items-center gap-1 rounded-lg border border-[var(--sidebar-border)] px-2 py-1 text-xs text-[var(--muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--foreground)]"
+                            title={`Mark as ${action.label}`}
+                          >
+                            <action.icon className="h-3 w-3" />
+                            {action.label}
+                          </button>
+                        ))}
+                      </div>
                     )}
                   </div>
-                  {/* Quick action buttons — aligned right under the badges */}
-                  {getQuickActions(job.status).length > 0 && (
-                    <div className="flex gap-1.5">
-                      {getQuickActions(job.status).map((action) => (
-                        <button
-                          key={action.status}
-                          onClick={(e) => quickStatusChange(e, job.id, action.status)}
-                          className="flex items-center gap-1 rounded-lg border border-[var(--sidebar-border)] px-2 py-1 text-xs text-[var(--muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--foreground)]"
-                          title={`Mark as ${action.label}`}
-                        >
-                          <action.icon className="h-3 w-3" />
-                          {action.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
 
           {/* Bottom pagination */}
           {totalPages > 1 && (

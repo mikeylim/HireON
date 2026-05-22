@@ -13,10 +13,14 @@ import {
   Archive,
   Trash2,
   Pencil,
+  FileText,
+  Briefcase,
+  History,
+  StickyNote,
 } from "lucide-react";
 import type { Job, JobStatus } from "@/lib/types/job";
-import { titleCase } from "@/lib/utils";
-import { ApplicationTimeline } from "./application-timeline";
+import { titleCase, parseDate } from "@/lib/utils";
+import { ApplicationTimeline, type ClearableField } from "./application-timeline";
 
 const STATUS_ACTIONS: {
   value: JobStatus;
@@ -32,6 +36,8 @@ const STATUS_ACTIONS: {
 ];
 
 const INTERVIEW_TYPES = ["phone", "video", "onsite", "technical", "behavioral", "panel", "other"];
+
+type Tab = "overview" | "application" | "timeline" | "notes";
 
 function convertToAnnual(amount: number, period: "annual" | "monthly" | "hourly"): number {
   if (period === "hourly") return Math.round(amount * 40 * 52);
@@ -56,7 +62,11 @@ export function JobDetailModal({
   onUpdate,
   onDelete,
 }: JobDetailModalProps) {
-  // Core job fields — editable
+  // ── State ────────────────────────────────────────────────────────────────
+
+  const [tab, setTab] = useState<Tab>("overview");
+
+  // Core job fields
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(job.title ?? "");
   const [company, setCompany] = useState(job.company ?? "");
@@ -65,7 +75,7 @@ export function JobDetailModal({
   const [description, setDescription] = useState(job.description ?? "");
   const [deadline, setDeadline] = useState(job.deadline?.slice(0, 10) ?? "");
 
-  // General fields
+  // Notes
   const [notes, setNotes] = useState(job.notes ?? "");
 
   // Interview fields
@@ -101,7 +111,9 @@ export function JobDetailModal({
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  // Close on Escape key
+  // ── Effects ──────────────────────────────────────────────────────────────
+
+  // Close on Escape
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -110,7 +122,7 @@ export function JobDetailModal({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  // Sync local state when the job prop changes (e.g. after a status update)
+  // Sync local state when job prop updates (e.g., after a status change)
   useEffect(() => {
     setTitle(job.title ?? "");
     setCompany(job.company ?? "");
@@ -140,7 +152,8 @@ export function JobDetailModal({
     setArchivedDate(job.archived_date?.slice(0, 10) ?? "");
   }, [job]);
 
-  // Generic update helper
+  // ── Handlers ─────────────────────────────────────────────────────────────
+
   async function updateJob(updates: Record<string, unknown>) {
     setSaving(true);
     try {
@@ -158,29 +171,22 @@ export function JobDetailModal({
     }
   }
 
-  // Status change — also auto-sets relevant date fields
   async function handleStatusChange(newStatus: JobStatus) {
     const updates: Record<string, unknown> = { status: newStatus };
-
-    // Auto-populate date fields on status transitions
     const now = new Date().toISOString();
-    if (newStatus === "applied" && !job.applied_date) {
-      updates.applied_date = now;
-    }
-    if (newStatus === "rejected" && !job.rejected_date) {
-      updates.rejected_date = now;
-    }
-    if (newStatus === "archived" && !job.archived_date) {
-      updates.archived_date = now;
-    }
-    if (newStatus === "offer" && !job.offer_date) {
-      updates.offer_date = now;
-    }
-
+    if (newStatus === "applied" && !job.applied_date) updates.applied_date = now;
+    if (newStatus === "rejected" && !job.rejected_date) updates.rejected_date = now;
+    if (newStatus === "archived" && !job.archived_date) updates.archived_date = now;
+    if (newStatus === "offer" && !job.offer_date) updates.offer_date = now;
     await updateJob(updates);
+    // Auto-jump to the Application tab so the user sees the new status's details
+    if (newStatus !== "saved" && newStatus !== "new") setTab("application");
   }
 
-  // Save all editable fields at once
+  async function handleClearTimelineEvent(field: ClearableField) {
+    await updateJob({ [field]: null });
+  }
+
   async function handleSaveDetails() {
     const updates: Record<string, unknown> = {
       title: title.trim(),
@@ -229,33 +235,47 @@ export function JobDetailModal({
     }
   }
 
-  // Check if any field has changed from the original job
-  const hasChanges =
-    title !== (job.title ?? "") ||
-    company !== (job.company ?? "") ||
-    location !== (job.location ?? "") ||
-    jobUrl !== (job.url ?? "") ||
-    description !== (job.description ?? "") ||
-    deadline !== (job.deadline?.slice(0, 10) ?? "") ||
-    notes !== (job.notes ?? "") ||
-    appliedDate !== (job.applied_date?.slice(0, 10) ?? "") ||
-    appliedMethod !== (job.applied_method ?? "") ||
-    appliedResumeVersion !== (job.applied_resume_version ?? "") ||
-    appliedCoverLetter !== (job.applied_cover_letter ?? false) ||
-    appliedReferral !== (job.applied_referral ?? "") ||
-    appliedFollowUpDate !== (job.applied_follow_up_date?.slice(0, 10) ?? "") ||
-    interviewDate !== (job.interview_date?.slice(0, 16) ?? "") ||
-    interviewType !== (job.interview_type ?? "") ||
-    interviewLocation !== (job.interview_location ?? "") ||
-    interviewContact !== (job.interview_contact ?? "") ||
-    interviewPrep !== (job.interview_prep ?? "") ||
-    offerAmount !== (job.offer_amount?.toString() ?? "") ||
-    offerDate !== (job.offer_date?.slice(0, 10) ?? "") ||
-    offerDeadline !== (job.offer_deadline?.slice(0, 10) ?? "") ||
-    rejectionReason !== (job.rejection_reason ?? "") ||
-    rejectedDate !== (job.rejected_date?.slice(0, 10) ?? "") ||
-    archiveReason !== (job.archive_reason ?? "") ||
-    archivedDate !== (job.archived_date?.slice(0, 10) ?? "");
+  // ── Change tracking ──────────────────────────────────────────────────────
+  // Build a list of CHANGED FIELD LABELS so the Save button can show
+  // a count and the user knows what's pending.
+  const changes: string[] = [];
+  if (title !== (job.title ?? "")) changes.push("title");
+  if (company !== (job.company ?? "")) changes.push("company");
+  if (location !== (job.location ?? "")) changes.push("location");
+  if (jobUrl !== (job.url ?? "")) changes.push("URL");
+  if (description !== (job.description ?? "")) changes.push("description");
+  if (deadline !== (job.deadline?.slice(0, 10) ?? "")) changes.push("deadline");
+  if (notes !== (job.notes ?? "")) changes.push("notes");
+  if (appliedDate !== (job.applied_date?.slice(0, 10) ?? "")) changes.push("applied date");
+  if (appliedMethod !== (job.applied_method ?? "")) changes.push("application method");
+  if (appliedResumeVersion !== (job.applied_resume_version ?? "")) changes.push("resume version");
+  if (appliedCoverLetter !== (job.applied_cover_letter ?? false)) changes.push("cover letter");
+  if (appliedReferral !== (job.applied_referral ?? "")) changes.push("referral");
+  if (appliedFollowUpDate !== (job.applied_follow_up_date?.slice(0, 10) ?? "")) changes.push("follow-up date");
+  if (interviewDate !== (job.interview_date?.slice(0, 16) ?? "")) changes.push("interview date");
+  if (interviewType !== (job.interview_type ?? "")) changes.push("interview type");
+  if (interviewLocation !== (job.interview_location ?? "")) changes.push("interview location");
+  if (interviewContact !== (job.interview_contact ?? "")) changes.push("interview contact");
+  if (interviewPrep !== (job.interview_prep ?? "")) changes.push("interview prep");
+  if (offerAmount !== (job.offer_amount?.toString() ?? "")) changes.push("offer amount");
+  if (offerDate !== (job.offer_date?.slice(0, 10) ?? "")) changes.push("offer date");
+  if (offerDeadline !== (job.offer_deadline?.slice(0, 10) ?? "")) changes.push("offer deadline");
+  if (rejectionReason !== (job.rejection_reason ?? "")) changes.push("rejection reason");
+  if (rejectedDate !== (job.rejected_date?.slice(0, 10) ?? "")) changes.push("rejected date");
+  if (archiveReason !== (job.archive_reason ?? "")) changes.push("archive reason");
+  if (archivedDate !== (job.archived_date?.slice(0, 10) ?? "")) changes.push("archived date");
+
+  const hasChanges = changes.length > 0;
+
+  // ── Tab definitions ──────────────────────────────────────────────────────
+  const TABS: { id: Tab; label: string; icon: typeof FileText }[] = [
+    { id: "overview", label: "Overview", icon: FileText },
+    { id: "application", label: "Application", icon: Briefcase },
+    { id: "timeline", label: "Timeline", icon: History },
+    { id: "notes", label: "Notes", icon: StickyNote },
+  ];
+
+  // ── Render ───────────────────────────────────────────────────────────────
 
   return (
     <div
@@ -264,156 +284,106 @@ export function JobDetailModal({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative max-h-[95vh] w-full overflow-y-auto rounded-t-2xl border border-[var(--sidebar-border)] bg-[var(--background)] p-4 shadow-xl sm:max-w-2xl sm:rounded-2xl sm:p-6"
+        className="relative flex h-[95vh] w-full flex-col rounded-t-2xl border border-[var(--sidebar-border)] bg-[var(--background)] shadow-xl sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:rounded-2xl"
       >
-        {/* Close */}
-        <button
-          onClick={onClose}
-          className="absolute right-4 top-4 rounded-lg p-1.5 text-[var(--muted)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
-        >
-          <X className="h-5 w-5" />
-        </button>
-
-        {/* Header — toggles between view and edit mode */}
-        <div className="pr-10">
-          {editing ? (
-            <div className="space-y-2">
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className={`${inputClass} text-lg font-bold`}
-                placeholder="Job title"
-              />
-              <div className="grid grid-cols-2 gap-2">
+        {/* ═══ Sticky Header ═══ */}
+        <div className="shrink-0 border-b border-[var(--sidebar-border)] p-4 sm:p-5">
+          {/* Title row + close */}
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              {editing ? (
                 <input
                   type="text"
-                  value={company}
-                  onChange={(e) => setCompany(e.target.value)}
-                  className={inputClass}
-                  placeholder="Company"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className={`${inputClass} text-lg font-bold`}
+                  placeholder="Job title"
                 />
-                <input
-                  type="text"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  className={inputClass}
-                  placeholder="Location"
-                />
-              </div>
-              <input
-                type="url"
-                value={jobUrl}
-                onChange={(e) => setJobUrl(e.target.value)}
-                className={inputClass}
-                placeholder="Job posting URL"
-              />
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className={labelClass}>Application Deadline</label>
-                  <input
-                    type="date"
-                    value={deadline}
-                    onChange={(e) => setDeadline(e.target.value)}
-                    className={inputClass}
-                  />
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-start justify-between">
-              <div>
-                <h2 className="text-xl font-bold">{titleCase(title || job.title)}</h2>
-                <p className="mt-1 text-sm text-[var(--muted)]">
-                  {company || job.company} · {location || job.location}
-                </p>
-              </div>
-              <button
-                onClick={() => setEditing(true)}
-                className="rounded-lg p-1.5 text-[var(--muted)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
-                title="Edit job details"
-              >
-                <Pencil className="h-4 w-4" />
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Metadata badges */}
-        <div className="mt-3 flex flex-wrap gap-2">
-          <span className="rounded-full bg-[var(--accent)] px-2.5 py-1 text-xs text-[var(--muted)]">
-            {job.source}
-          </span>
-          {job.job_type && (
-            <span className="rounded-full bg-[var(--accent)] px-2.5 py-1 text-xs text-[var(--muted)]">
-              {job.job_type}
-            </span>
-          )}
-          {job.work_mode && job.work_mode !== "onsite" && (
-            <span className="rounded-full bg-[var(--accent)] px-2.5 py-1 text-xs text-[var(--muted)]">
-              {job.work_mode}
-            </span>
-          )}
-          {job.salary_min && (
-            <span className="rounded-full bg-[var(--accent)] px-2.5 py-1 text-xs text-[var(--muted)]">
-              ${(job.salary_min / 1000).toFixed(0)}k
-              {job.salary_max ? `–$${(job.salary_max / 1000).toFixed(0)}k` : "+"}
-            </span>
-          )}
-          {job.relevance_score !== null && (
-            <span
-              className={`rounded-full px-2.5 py-1 text-xs font-bold ${
-                job.relevance_score >= 70
-                  ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                  : job.relevance_score >= 40
-                    ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
-                    : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-              }`}
-            >
-              Score: {job.relevance_score}
-            </span>
-          )}
-        </div>
-
-        {/* Link to posting */}
-        {!editing && (jobUrl || job.url) && (
-          <a
-            href={jobUrl || job.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-[var(--primary)] hover:underline"
-          >
-            View original posting <ExternalLink className="h-3.5 w-3.5" />
-          </a>
-        )}
-
-        {/* Description */}
-        {editing ? (
-          <div className="mt-4">
-            <h3 className="text-sm font-semibold">Description</h3>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={4}
-              className={`mt-1 ${inputClass}`}
-              placeholder="Job description..."
-            />
-          </div>
-        ) : (
-          (description || job.description) && (
-            <div className="mt-4">
-              <h3 className="text-sm font-semibold">Description</h3>
-              <p className="mt-1 text-sm leading-relaxed text-[var(--muted)]">
-                {description || job.description}
+              ) : (
+                <h2 className="truncate text-lg font-bold sm:text-xl">
+                  {titleCase(title || job.title)}
+                </h2>
+              )}
+              <p className="mt-0.5 truncate text-sm text-[var(--muted)]">
+                {company || job.company} <span className="opacity-50">·</span>{" "}
+                {location || job.location}
+                {job.job_type && job.job_type !== "full-time" && (
+                  <>
+                    {" "}
+                    <span className="opacity-50">·</span>{" "}
+                    <span className="capitalize">
+                      {job.job_type.replace("-", " ")}
+                    </span>
+                  </>
+                )}
               </p>
             </div>
-          )
-        )}
+            <div className="flex shrink-0 items-center gap-1">
+              {!editing && (
+                <button
+                  onClick={() => setEditing(true)}
+                  className="rounded-lg p-1.5 text-[var(--muted)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
+                  title="Edit job details"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+              )}
+              <button
+                onClick={onClose}
+                className="rounded-lg p-1.5 text-[var(--muted)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
 
-        {/* ── Status buttons ── */}
-        <div className="mt-5">
-          <h3 className="text-sm font-semibold">Status</h3>
-          <div className="mt-2 flex flex-wrap gap-2">
+          {/* Compact info row: score, salary, original posting link */}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {job.relevance_score !== null && (
+              <span
+                className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                  job.relevance_score >= 70
+                    ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                    : job.relevance_score >= 40
+                      ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+                      : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+                }`}
+              >
+                Score {job.relevance_score}
+              </span>
+            )}
+            {job.salary_min && (
+              <span className="whitespace-nowrap rounded-full bg-[var(--accent)] px-2.5 py-0.5 text-xs font-semibold">
+                ${(job.salary_min / 1000).toFixed(0)}k
+                {job.salary_max
+                  ? `–$${(job.salary_max / 1000).toFixed(0)}k`
+                  : "+"}
+              </span>
+            )}
+            {job.source && (
+              <span className="rounded-md bg-[var(--accent)] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[var(--muted)]">
+                {job.source}
+              </span>
+            )}
+            {job.work_mode && job.work_mode !== "onsite" && (
+              <span className="rounded-md bg-[var(--accent)] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[var(--muted)]">
+                {job.work_mode}
+              </span>
+            )}
+            {(jobUrl || job.url) && (
+              <a
+                href={jobUrl || job.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-[var(--primary)] hover:underline"
+              >
+                View original posting <ExternalLink className="h-3 w-3" />
+              </a>
+            )}
+          </div>
+
+          {/* Status buttons — always accessible regardless of which tab */}
+          <div className="mt-3 flex flex-wrap gap-1.5">
             {STATUS_ACTIONS.map((action) => {
               const isActive = job.status === action.value;
               return (
@@ -421,13 +391,13 @@ export function JobDetailModal({
                   key={action.value}
                   onClick={() => handleStatusChange(action.value)}
                   disabled={saving || isActive}
-                  className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                  className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${
                     isActive
                       ? "border-[var(--primary)] bg-[var(--primary)] text-white"
                       : "border-[var(--sidebar-border)] text-[var(--muted)] hover:border-[var(--primary)] hover:text-[var(--foreground)]"
                   } disabled:opacity-50`}
                 >
-                  <action.icon className="h-3.5 w-3.5" />
+                  <action.icon className="h-3 w-3" />
                   {action.label}
                 </button>
               );
@@ -435,335 +405,654 @@ export function JobDetailModal({
           </div>
         </div>
 
-        {/* ── Applied details — shown when status is applied ── */}
-        {job.status === "applied" && (
-          <div className="mt-5 space-y-3 rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950/30">
-            <h3 className="text-sm font-semibold text-blue-700 dark:text-blue-300">
-              Application Details
-            </h3>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <label className={labelClass}>How did you apply?</label>
-                <select
-                  value={appliedMethod}
-                  onChange={(e) => setAppliedMethod(e.target.value)}
-                  className={inputClass}
-                >
-                  <option value="">Select method...</option>
-                  <option value="company_website">Company Website</option>
-                  <option value="linkedin_easy_apply">LinkedIn Easy Apply</option>
-                  <option value="email">Email</option>
-                  <option value="referral">Referral</option>
-                  <option value="job_portal">Job Portal (Indeed, etc.)</option>
-                  <option value="in_person">In Person / Job Fair</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-              <div>
-                <label className={labelClass}>Resume Version</label>
-                <input
-                  type="text"
-                  value={appliedResumeVersion}
-                  onChange={(e) => setAppliedResumeVersion(e.target.value)}
-                  placeholder="e.g. Resume_v3_Frontend.pdf"
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Referral Contact</label>
-                <input
-                  type="text"
-                  value={appliedReferral}
-                  onChange={(e) => setAppliedReferral(e.target.value)}
-                  placeholder="Name, email, or relationship"
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Follow-up Date</label>
-                <input
-                  type="date"
-                  value={appliedFollowUpDate}
-                  onChange={(e) => setAppliedFollowUpDate(e.target.value)}
-                  className={inputClass}
-                />
-              </div>
-            </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={appliedCoverLetter}
-                onChange={(e) => setAppliedCoverLetter(e.target.checked)}
-                className="h-4 w-4 rounded border-[var(--sidebar-border)] accent-[var(--primary)]"
-              />
-              Submitted a cover letter
-            </label>
-            <div>
-              <label className={labelClass}>Date Applied</label>
-              <input
-                type="date"
-                value={appliedDate}
-                onChange={(e) => setAppliedDate(e.target.value)}
-                className={inputClass}
-              />
-            </div>
+        {/* ═══ Tab bar ═══ */}
+        <div className="shrink-0 border-b border-[var(--sidebar-border)] px-3 sm:px-5">
+          <div className="flex gap-1">
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-xs font-medium transition-colors sm:text-sm ${
+                  tab === t.id
+                    ? "border-[var(--primary)] text-[var(--foreground)]"
+                    : "border-transparent text-[var(--muted)] hover:text-[var(--foreground)]"
+                }`}
+              >
+                <t.icon className="h-3.5 w-3.5" />
+                {t.label}
+              </button>
+            ))}
           </div>
-        )}
+        </div>
 
-        {/* ── Interview details — shown when status is interview ── */}
-        {job.status === "interview" && (
-          <div className="mt-5 space-y-3 rounded-xl border border-purple-200 bg-purple-50 p-4 dark:border-purple-800 dark:bg-purple-950/30">
-            <h3 className="text-sm font-semibold text-purple-700 dark:text-purple-300">
-              Interview Details
-            </h3>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <label className={labelClass}>Date &amp; Time</label>
-                <input
-                  type="datetime-local"
-                  value={interviewDate}
-                  onChange={(e) => setInterviewDate(e.target.value)}
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Interview Type</label>
-                <select
-                  value={interviewType}
-                  onChange={(e) => setInterviewType(e.target.value)}
-                  className={inputClass}
-                >
-                  <option value="">Select type...</option>
-                  {INTERVIEW_TYPES.map((t) => (
-                    <option key={t} value={t}>
-                      {t.charAt(0).toUpperCase() + t.slice(1)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className={labelClass}>Location / Link</label>
-                <input
-                  type="text"
-                  value={interviewLocation}
-                  onChange={(e) => setInterviewLocation(e.target.value)}
-                  placeholder="Office address or Zoom/Teams link"
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Contact Person</label>
-                <input
-                  type="text"
-                  value={interviewContact}
-                  onChange={(e) => setInterviewContact(e.target.value)}
-                  placeholder="Interviewer name, email, or phone"
-                  className={inputClass}
-                />
-              </div>
-            </div>
+        {/* ═══ Tab content (scrollable) ═══ */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5">
+          {tab === "overview" && (
+            <OverviewTab
+              editing={editing}
+              company={company}
+              setCompany={setCompany}
+              location={location}
+              setLocation={setLocation}
+              jobUrl={jobUrl}
+              setJobUrl={setJobUrl}
+              description={description}
+              setDescription={setDescription}
+              deadline={deadline}
+              setDeadline={setDeadline}
+              job={job}
+            />
+          )}
+
+          {tab === "application" && (
+            <ApplicationTab
+              job={job}
+              appliedDate={appliedDate}
+              setAppliedDate={setAppliedDate}
+              appliedMethod={appliedMethod}
+              setAppliedMethod={setAppliedMethod}
+              appliedResumeVersion={appliedResumeVersion}
+              setAppliedResumeVersion={setAppliedResumeVersion}
+              appliedCoverLetter={appliedCoverLetter}
+              setAppliedCoverLetter={setAppliedCoverLetter}
+              appliedReferral={appliedReferral}
+              setAppliedReferral={setAppliedReferral}
+              appliedFollowUpDate={appliedFollowUpDate}
+              setAppliedFollowUpDate={setAppliedFollowUpDate}
+              interviewDate={interviewDate}
+              setInterviewDate={setInterviewDate}
+              interviewType={interviewType}
+              setInterviewType={setInterviewType}
+              interviewLocation={interviewLocation}
+              setInterviewLocation={setInterviewLocation}
+              interviewContact={interviewContact}
+              setInterviewContact={setInterviewContact}
+              interviewPrep={interviewPrep}
+              setInterviewPrep={setInterviewPrep}
+              offerAmount={offerAmount}
+              setOfferAmount={setOfferAmount}
+              offerSalaryPeriod={offerSalaryPeriod}
+              setOfferSalaryPeriod={setOfferSalaryPeriod}
+              offerDate={offerDate}
+              setOfferDate={setOfferDate}
+              offerDeadline={offerDeadline}
+              setOfferDeadline={setOfferDeadline}
+              rejectionReason={rejectionReason}
+              setRejectionReason={setRejectionReason}
+              rejectedDate={rejectedDate}
+              setRejectedDate={setRejectedDate}
+              archiveReason={archiveReason}
+              setArchiveReason={setArchiveReason}
+              archivedDate={archivedDate}
+              setArchivedDate={setArchivedDate}
+            />
+          )}
+
+          {tab === "timeline" && (
+            <ApplicationTimeline
+              job={job}
+              onClearEvent={handleClearTimelineEvent}
+            />
+          )}
+
+          {tab === "notes" && (
             <div>
-              <label className={labelClass}>Prep Notes &amp; Links</label>
+              <p className="mb-2 text-xs text-[var(--muted)]">
+                Anything useful for this application — referral contacts, prep links,
+                follow-up reminders, etc.
+              </p>
               <textarea
-                value={interviewPrep}
-                onChange={(e) => setInterviewPrep(e.target.value)}
-                placeholder="Company research, questions to ask, portfolio links, practice problems..."
-                rows={3}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Start typing..."
+                rows={14}
                 className={inputClass}
               />
             </div>
-          </div>
-        )}
-
-        {/* ── Offer details — shown when status is offer ── */}
-        {job.status === "offer" && (
-          <div className="mt-5 space-y-3 rounded-xl border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-950/30">
-            <h3 className="text-sm font-semibold text-green-700 dark:text-green-300">
-              Offer Details
-            </h3>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <div>
-                <label className={labelClass}>Pay Period</label>
-                <select
-                  value={offerSalaryPeriod}
-                  onChange={(e) => setOfferSalaryPeriod(e.target.value as "annual" | "monthly" | "hourly")}
-                  className={inputClass}
-                >
-                  <option value="annual">Annual</option>
-                  <option value="monthly">Monthly</option>
-                  <option value="hourly">Hourly</option>
-                </select>
-              </div>
-              <div>
-                <label className={labelClass}>
-                  Offered Amount ({offerSalaryPeriod === "hourly" ? "$/hr" : offerSalaryPeriod === "monthly" ? "$/mo" : "$/yr"})
-                </label>
-                <input
-                  type="number"
-                  value={offerAmount}
-                  onChange={(e) => setOfferAmount(e.target.value)}
-                  placeholder={offerSalaryPeriod === "hourly" ? "e.g. 40" : offerSalaryPeriod === "monthly" ? "e.g. 6000" : "e.g. 75000"}
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Response Deadline</label>
-                <input
-                  type="date"
-                  value={offerDeadline}
-                  onChange={(e) => setOfferDeadline(e.target.value)}
-                  className={inputClass}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <label className={labelClass}>Date Received</label>
-                <input
-                  type="date"
-                  value={offerDate}
-                  onChange={(e) => setOfferDate(e.target.value)}
-                  className={inputClass}
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── Rejection details — shown when status is rejected ── */}
-        {job.status === "rejected" && (
-          <div className="mt-5 space-y-3 rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950/30">
-            <h3 className="text-sm font-semibold text-red-700 dark:text-red-300">
-              Rejection Details
-            </h3>
-            <div>
-              <label className={labelClass}>Reason</label>
-              <select
-                value={rejectionReason}
-                onChange={(e) => setRejectionReason(e.target.value)}
-                className={inputClass}
-              >
-                <option value="">Select reason...</option>
-                <option value="no_response">No response / Ghosted</option>
-                <option value="not_selected">Not selected after interview</option>
-                <option value="failed_technical">Failed technical assessment</option>
-                <option value="position_filled">Position already filled</option>
-                <option value="not_qualified">Not qualified</option>
-                <option value="withdrew">I withdrew my application</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
-            <div>
-              <label className={labelClass}>Date Rejected</label>
-              <input
-                type="date"
-                value={rejectedDate}
-                onChange={(e) => setRejectedDate(e.target.value)}
-                className={inputClass}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* ── Archive details — shown when status is archived ── */}
-        {job.status === "archived" && (
-          <div className="mt-5 space-y-3 rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/30">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-              Archive Details
-            </h3>
-            <div>
-              <label className={labelClass}>Reason for archiving</label>
-              <select
-                value={archiveReason}
-                onChange={(e) => setArchiveReason(e.target.value)}
-                className={inputClass}
-              >
-                <option value="">Select reason...</option>
-                <option value="posting_expired">Job posting expired</option>
-                <option value="position_filled">Position already filled</option>
-                <option value="not_interested">No longer interested</option>
-                <option value="declined_offer">Declined the offer</option>
-                <option value="ghosted">Ghosted after applying</option>
-                <option value="underqualified">Underqualified for the role</option>
-                <option value="overqualified">Overqualified for the role</option>
-                <option value="low_salary">Salary too low</option>
-                <option value="bad_reviews">Bad company reviews</option>
-                <option value="found_better">Found a better opportunity</option>
-                <option value="duplicate">Duplicate posting</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
-            <div>
-              <label className={labelClass}>Date Archived</label>
-              <input
-                type="date"
-                value={archivedDate}
-                onChange={(e) => setArchivedDate(e.target.value)}
-                className={inputClass}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* ── Notes — always visible ── */}
-        <div className="mt-5">
-          <h3 className="text-sm font-semibold">Notes</h3>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Referral contacts, follow-up reminders, anything useful..."
-            rows={3}
-            className={`mt-2 ${inputClass}`}
-          />
-        </div>
-
-        {/* Save all changes button */}
-        <button
-          onClick={handleSaveDetails}
-          disabled={saving || !hasChanges}
-          className="mt-3 flex items-center gap-1.5 rounded-lg bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--primary-hover)] disabled:opacity-50"
-        >
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-          Save Changes
-        </button>
-
-        {/* Application timeline */}
-        <div className="mt-5">
-          <ApplicationTimeline job={job} />
-        </div>
-
-        {/* Delete */}
-        <div className="mt-5 border-t border-[var(--sidebar-border)] pt-4">
-          {confirmDelete ? (
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-[var(--destructive)]">
-                Delete this job permanently?
-              </span>
-              <button
-                onClick={handleDelete}
-                disabled={deleting}
-                className="flex items-center gap-1.5 rounded-lg bg-[var(--destructive)] px-3 py-1.5 text-xs font-medium text-white"
-              >
-                {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                Yes, delete
-              </button>
-              <button
-                onClick={() => setConfirmDelete(false)}
-                className="rounded-lg border border-[var(--sidebar-border)] px-3 py-1.5 text-xs font-medium text-[var(--muted)]"
-              >
-                Cancel
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => setConfirmDelete(true)}
-              className="flex items-center gap-1.5 text-xs text-[var(--muted)] hover:text-[var(--destructive)]"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              Delete job
-            </button>
           )}
         </div>
+
+        {/* ═══ Sticky footer ═══ */}
+        <div className="shrink-0 border-t border-[var(--sidebar-border)] bg-[var(--background)] p-3 sm:p-4">
+          <div className="flex items-center justify-between gap-3">
+            {/* Left: Delete (with confirmation) */}
+            {confirmDelete ? (
+              <div className="flex items-center gap-2 text-sm">
+                <span className="hidden text-[var(--destructive)] sm:inline">
+                  Delete permanently?
+                </span>
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="flex items-center gap-1.5 rounded-lg bg-[var(--destructive)] px-3 py-1.5 text-xs font-medium text-white"
+                >
+                  {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                  Yes, delete
+                </button>
+                <button
+                  onClick={() => setConfirmDelete(false)}
+                  className="rounded-lg border border-[var(--sidebar-border)] px-3 py-1.5 text-xs font-medium text-[var(--muted)]"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-[var(--muted)] hover:text-[var(--destructive)]"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete
+              </button>
+            )}
+
+            {/* Right: Save Changes with unsaved count */}
+            <button
+              onClick={handleSaveDetails}
+              disabled={saving || !hasChanges}
+              title={
+                hasChanges
+                  ? `Unsaved: ${changes.slice(0, 5).join(", ")}${
+                      changes.length > 5 ? "…" : ""
+                    }`
+                  : "No changes to save"
+              }
+              className="flex items-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--primary-hover)] disabled:opacity-50"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Save Changes
+              {hasChanges && (
+                <span className="rounded-full bg-white/25 px-1.5 py-0.5 text-[10px] font-bold">
+                  {changes.length}
+                </span>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Sub-components — defined here to keep state ownership in the parent
+// ═════════════════════════════════════════════════════════════════════════════
+
+interface OverviewTabProps {
+  editing: boolean;
+  company: string;
+  setCompany: (v: string) => void;
+  location: string;
+  setLocation: (v: string) => void;
+  jobUrl: string;
+  setJobUrl: (v: string) => void;
+  description: string;
+  setDescription: (v: string) => void;
+  deadline: string;
+  setDeadline: (v: string) => void;
+  job: Job;
+}
+
+function OverviewTab({
+  editing,
+  company,
+  setCompany,
+  location,
+  setLocation,
+  jobUrl,
+  setJobUrl,
+  description,
+  setDescription,
+  deadline,
+  setDeadline,
+  job,
+}: OverviewTabProps) {
+  if (editing) {
+    return (
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <label className={labelClass}>Company</label>
+            <input
+              type="text"
+              value={company}
+              onChange={(e) => setCompany(e.target.value)}
+              className={inputClass}
+              placeholder="Company"
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Location</label>
+            <input
+              type="text"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              className={inputClass}
+              placeholder="Location"
+            />
+          </div>
+        </div>
+        <div>
+          <label className={labelClass}>Posting URL</label>
+          <input
+            type="url"
+            value={jobUrl}
+            onChange={(e) => setJobUrl(e.target.value)}
+            className={inputClass}
+            placeholder="https://..."
+          />
+        </div>
+        <div>
+          <label className={labelClass}>Application Deadline</label>
+          <input
+            type="date"
+            value={deadline}
+            onChange={(e) => setDeadline(e.target.value)}
+            className={inputClass}
+          />
+        </div>
+        <div>
+          <label className={labelClass}>Description</label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={8}
+            className={inputClass}
+            placeholder="Job description..."
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Read-only view
+  return (
+    <div className="space-y-4">
+      {deadline && (
+        <div className="rounded-lg border border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] p-3">
+          <p className="text-xs font-medium text-[var(--muted)]">Application Deadline</p>
+          <p className="mt-0.5 text-sm font-semibold">
+            {parseDate(deadline)?.toLocaleDateString("en-US", {
+              month: "long",
+              day: "numeric",
+              year: "numeric",
+            }) ?? deadline}
+          </p>
+        </div>
+      )}
+
+      {(description || job.description) ? (
+        <div>
+          <h3 className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
+            Description
+          </h3>
+          <p className="mt-2 whitespace-pre-line text-sm leading-relaxed">
+            {description || job.description}
+          </p>
+        </div>
+      ) : (
+        <p className="text-sm text-[var(--muted)]">
+          No description yet. Click the pencil icon to add one.
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface ApplicationTabProps {
+  job: Job;
+  appliedDate: string;
+  setAppliedDate: (v: string) => void;
+  appliedMethod: string;
+  setAppliedMethod: (v: string) => void;
+  appliedResumeVersion: string;
+  setAppliedResumeVersion: (v: string) => void;
+  appliedCoverLetter: boolean;
+  setAppliedCoverLetter: (v: boolean) => void;
+  appliedReferral: string;
+  setAppliedReferral: (v: string) => void;
+  appliedFollowUpDate: string;
+  setAppliedFollowUpDate: (v: string) => void;
+  interviewDate: string;
+  setInterviewDate: (v: string) => void;
+  interviewType: string;
+  setInterviewType: (v: string) => void;
+  interviewLocation: string;
+  setInterviewLocation: (v: string) => void;
+  interviewContact: string;
+  setInterviewContact: (v: string) => void;
+  interviewPrep: string;
+  setInterviewPrep: (v: string) => void;
+  offerAmount: string;
+  setOfferAmount: (v: string) => void;
+  offerSalaryPeriod: "annual" | "monthly" | "hourly";
+  setOfferSalaryPeriod: (v: "annual" | "monthly" | "hourly") => void;
+  offerDate: string;
+  setOfferDate: (v: string) => void;
+  offerDeadline: string;
+  setOfferDeadline: (v: string) => void;
+  rejectionReason: string;
+  setRejectionReason: (v: string) => void;
+  rejectedDate: string;
+  setRejectedDate: (v: string) => void;
+  archiveReason: string;
+  setArchiveReason: (v: string) => void;
+  archivedDate: string;
+  setArchivedDate: (v: string) => void;
+}
+
+function ApplicationTab(props: ApplicationTabProps) {
+  const { job } = props;
+
+  // For statuses with no extra fields, show a helpful prompt
+  if (job.status === "saved" || job.status === "new") {
+    return (
+      <div className="rounded-xl border border-dashed border-[var(--sidebar-border)] p-8 text-center">
+        <Briefcase className="mx-auto h-10 w-10 text-[var(--muted)]" />
+        <h3 className="mt-3 text-sm font-semibold">No application details yet</h3>
+        <p className="mt-1 text-xs text-[var(--muted)]">
+          When you mark this job as Applied (using the status buttons above),
+          this tab will let you track method, resume version, follow-ups, and more.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {job.status === "applied" && <AppliedFields {...props} />}
+      {job.status === "interview" && <InterviewFields {...props} />}
+      {job.status === "offer" && <OfferFields {...props} />}
+      {job.status === "rejected" && <RejectedFields {...props} />}
+      {job.status === "archived" && <ArchivedFields {...props} />}
+    </div>
+  );
+}
+
+function AppliedFields(p: ApplicationTabProps) {
+  return (
+    <div className="space-y-3 rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950/30">
+      <h3 className="text-sm font-semibold text-blue-700 dark:text-blue-300">
+        Application Details
+      </h3>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div>
+          <label className={labelClass}>How did you apply?</label>
+          <select
+            value={p.appliedMethod}
+            onChange={(e) => p.setAppliedMethod(e.target.value)}
+            className={inputClass}
+          >
+            <option value="">Select method...</option>
+            <option value="company_website">Company Website</option>
+            <option value="linkedin_easy_apply">LinkedIn Easy Apply</option>
+            <option value="email">Email</option>
+            <option value="referral">Referral</option>
+            <option value="job_portal">Job Portal (Indeed, etc.)</option>
+            <option value="in_person">In Person / Job Fair</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div>
+          <label className={labelClass}>Resume Version</label>
+          <input
+            type="text"
+            value={p.appliedResumeVersion}
+            onChange={(e) => p.setAppliedResumeVersion(e.target.value)}
+            placeholder="e.g. Resume_v3_Frontend.pdf"
+            className={inputClass}
+          />
+        </div>
+        <div>
+          <label className={labelClass}>Referral Contact</label>
+          <input
+            type="text"
+            value={p.appliedReferral}
+            onChange={(e) => p.setAppliedReferral(e.target.value)}
+            placeholder="Name, email, or relationship"
+            className={inputClass}
+          />
+        </div>
+        <div>
+          <label className={labelClass}>Follow-up Date</label>
+          <input
+            type="date"
+            value={p.appliedFollowUpDate}
+            onChange={(e) => p.setAppliedFollowUpDate(e.target.value)}
+            className={inputClass}
+          />
+        </div>
+      </div>
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={p.appliedCoverLetter}
+          onChange={(e) => p.setAppliedCoverLetter(e.target.checked)}
+          className="h-4 w-4 rounded border-[var(--sidebar-border)] accent-[var(--primary)]"
+        />
+        Submitted a cover letter
+      </label>
+      <div>
+        <label className={labelClass}>Date Applied</label>
+        <input
+          type="date"
+          value={p.appliedDate}
+          onChange={(e) => p.setAppliedDate(e.target.value)}
+          className={inputClass}
+        />
+      </div>
+    </div>
+  );
+}
+
+function InterviewFields(p: ApplicationTabProps) {
+  return (
+    <div className="space-y-3 rounded-xl border border-purple-200 bg-purple-50 p-4 dark:border-purple-800 dark:bg-purple-950/30">
+      <h3 className="text-sm font-semibold text-purple-700 dark:text-purple-300">
+        Interview Details
+      </h3>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div>
+          <label className={labelClass}>Date &amp; Time</label>
+          <input
+            type="datetime-local"
+            value={p.interviewDate}
+            onChange={(e) => p.setInterviewDate(e.target.value)}
+            className={inputClass}
+          />
+        </div>
+        <div>
+          <label className={labelClass}>Interview Type</label>
+          <select
+            value={p.interviewType}
+            onChange={(e) => p.setInterviewType(e.target.value)}
+            className={inputClass}
+          >
+            <option value="">Select type...</option>
+            {INTERVIEW_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {t.charAt(0).toUpperCase() + t.slice(1)}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className={labelClass}>Location / Link</label>
+          <input
+            type="text"
+            value={p.interviewLocation}
+            onChange={(e) => p.setInterviewLocation(e.target.value)}
+            placeholder="Office address or Zoom/Teams link"
+            className={inputClass}
+          />
+        </div>
+        <div>
+          <label className={labelClass}>Contact Person</label>
+          <input
+            type="text"
+            value={p.interviewContact}
+            onChange={(e) => p.setInterviewContact(e.target.value)}
+            placeholder="Interviewer name, email, or phone"
+            className={inputClass}
+          />
+        </div>
+      </div>
+      <div>
+        <label className={labelClass}>Prep Notes &amp; Links</label>
+        <textarea
+          value={p.interviewPrep}
+          onChange={(e) => p.setInterviewPrep(e.target.value)}
+          placeholder="Company research, questions to ask, portfolio links, practice problems..."
+          rows={4}
+          className={inputClass}
+        />
+      </div>
+    </div>
+  );
+}
+
+function OfferFields(p: ApplicationTabProps) {
+  return (
+    <div className="space-y-3 rounded-xl border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-950/30">
+      <h3 className="text-sm font-semibold text-green-700 dark:text-green-300">
+        Offer Details
+      </h3>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div>
+          <label className={labelClass}>Pay Period</label>
+          <select
+            value={p.offerSalaryPeriod}
+            onChange={(e) =>
+              p.setOfferSalaryPeriod(e.target.value as "annual" | "monthly" | "hourly")
+            }
+            className={inputClass}
+          >
+            <option value="annual">Annual</option>
+            <option value="monthly">Monthly</option>
+            <option value="hourly">Hourly</option>
+          </select>
+        </div>
+        <div>
+          <label className={labelClass}>
+            Offered Amount (
+            {p.offerSalaryPeriod === "hourly"
+              ? "$/hr"
+              : p.offerSalaryPeriod === "monthly"
+                ? "$/mo"
+                : "$/yr"}
+            )
+          </label>
+          <input
+            type="number"
+            value={p.offerAmount}
+            onChange={(e) => p.setOfferAmount(e.target.value)}
+            placeholder={
+              p.offerSalaryPeriod === "hourly"
+                ? "e.g. 40"
+                : p.offerSalaryPeriod === "monthly"
+                  ? "e.g. 6000"
+                  : "e.g. 75000"
+            }
+            className={inputClass}
+          />
+        </div>
+        <div>
+          <label className={labelClass}>Response Deadline</label>
+          <input
+            type="date"
+            value={p.offerDeadline}
+            onChange={(e) => p.setOfferDeadline(e.target.value)}
+            className={inputClass}
+          />
+        </div>
+      </div>
+      <div>
+        <label className={labelClass}>Date Received</label>
+        <input
+          type="date"
+          value={p.offerDate}
+          onChange={(e) => p.setOfferDate(e.target.value)}
+          className={inputClass}
+        />
+      </div>
+    </div>
+  );
+}
+
+function RejectedFields(p: ApplicationTabProps) {
+  return (
+    <div className="space-y-3 rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950/30">
+      <h3 className="text-sm font-semibold text-red-700 dark:text-red-300">
+        Rejection Details
+      </h3>
+      <div>
+        <label className={labelClass}>Reason</label>
+        <select
+          value={p.rejectionReason}
+          onChange={(e) => p.setRejectionReason(e.target.value)}
+          className={inputClass}
+        >
+          <option value="">Select reason...</option>
+          <option value="no_response">No response / Ghosted</option>
+          <option value="not_selected">Not selected after interview</option>
+          <option value="failed_technical">Failed technical assessment</option>
+          <option value="position_filled">Position already filled</option>
+          <option value="not_qualified">Not qualified</option>
+          <option value="withdrew">I withdrew my application</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div>
+        <label className={labelClass}>Date Rejected</label>
+        <input
+          type="date"
+          value={p.rejectedDate}
+          onChange={(e) => p.setRejectedDate(e.target.value)}
+          className={inputClass}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ArchivedFields(p: ApplicationTabProps) {
+  return (
+    <div className="space-y-3 rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/30">
+      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+        Archive Details
+      </h3>
+      <div>
+        <label className={labelClass}>Reason for archiving</label>
+        <select
+          value={p.archiveReason}
+          onChange={(e) => p.setArchiveReason(e.target.value)}
+          className={inputClass}
+        >
+          <option value="">Select reason...</option>
+          <option value="posting_expired">Job posting expired</option>
+          <option value="position_filled">Position already filled</option>
+          <option value="not_interested">No longer interested</option>
+          <option value="declined_offer">Declined the offer</option>
+          <option value="ghosted">Ghosted after applying</option>
+          <option value="underqualified">Underqualified for the role</option>
+          <option value="overqualified">Overqualified for the role</option>
+          <option value="low_salary">Salary too low</option>
+          <option value="bad_reviews">Bad company reviews</option>
+          <option value="found_better">Found a better opportunity</option>
+          <option value="duplicate">Duplicate posting</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div>
+        <label className={labelClass}>Date Archived</label>
+        <input
+          type="date"
+          value={p.archivedDate}
+          onChange={(e) => p.setArchivedDate(e.target.value)}
+          className={inputClass}
+        />
       </div>
     </div>
   );
