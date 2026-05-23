@@ -10,6 +10,16 @@ export function titleCase(str: string): string {
   return str.replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+// Today's date in the user's LOCAL timezone, formatted as "YYYY-MM-DD".
+// Use this for auto-setting calendar-date fields (applied_date, rejected_date,
+// archived_date, offer_date, deadlines) so they reflect the user's calendar day
+// instead of UTC's calendar day — which can differ when the user is in the
+// evening of their local timezone.
+export function todayLocal(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 // Parse a date string safely, handling the calendar-date case.
 //
 // Date-only values like "2026-05-23" or timestamps that are exactly UTC

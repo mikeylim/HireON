@@ -16,7 +16,7 @@ import {
   CalendarRange,
 } from "lucide-react";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
-import { titleCase, parseDate } from "@/lib/utils";
+import { titleCase, parseDate, todayLocal } from "@/lib/utils";
 import { JobDetailModal } from "@/components/jobs/job-detail-modal";
 import type { Job } from "@/lib/types/job";
 
@@ -41,10 +41,13 @@ export default function DashboardPage() {
     const supabase = createBrowserSupabase();
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    const sevenDaysFromNow = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-    // Use start of today for deadline comparison — date-only values like "2026-04-03"
-    // are stored as midnight UTC, so comparing against current time would miss today's deadlines
-    const todayStart = new Date(new Date().setHours(0, 0, 0, 0)).toISOString();
+    // Deadlines are calendar dates stored at UTC midnight (e.g. "2026-05-22T00:00:00+00:00").
+    // To match today's deadline, compare against the LOCAL calendar date string —
+    // Postgres treats "2026-05-22" as UTC midnight on that day, exactly matching the stored value.
+    const todayStart = todayLocal();
+    const sevenDaysLater = new Date();
+    sevenDaysLater.setDate(sevenDaysLater.getDate() + 7);
+    const sevenDaysFromNow = `${sevenDaysLater.getFullYear()}-${String(sevenDaysLater.getMonth() + 1).padStart(2, "0")}-${String(sevenDaysLater.getDate()).padStart(2, "0")}`;
 
     const [
       total,

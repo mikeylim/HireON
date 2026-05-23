@@ -20,7 +20,7 @@ import { createBrowserSupabase } from "@/lib/supabase/browser";
 import { JobDetailModal } from "./job-detail-modal";
 import { ExportButton } from "./export-button";
 import type { Job, JobStatus } from "@/lib/types/job";
-import { titleCase, relativeTime, parseDate } from "@/lib/utils";
+import { titleCase, relativeTime, parseDate, todayLocal } from "@/lib/utils";
 
 const JOBS_PER_PAGE = 15;
 
@@ -32,6 +32,10 @@ interface JobListProps {
   emptyTitle: string;
   emptyDescription: string;
   exportFilename?: string;
+  // Per-page default sort. e.g. Saved defaults to deadline asc (soonest first),
+  // Applied could default to applied_date desc (most recent first), etc.
+  defaultSort?: SortField;
+  defaultSortAsc?: boolean;
 }
 
 // Reusable job list with pagination, sorting, and click-to-open detail modal
@@ -41,13 +45,15 @@ export function JobList({
   emptyTitle,
   emptyDescription,
   exportFilename,
+  defaultSort = "scraped_at",
+  defaultSortAsc = false,
 }: JobListProps) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [sortField, setSortField] = useState<SortField>("scraped_at");
-  const [sortAsc, setSortAsc] = useState(false);
+  const [sortField, setSortField] = useState<SortField>(defaultSort);
+  const [sortAsc, setSortAsc] = useState(defaultSortAsc);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   // Multi-select state for bulk actions — set of selected job IDs
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -141,10 +147,11 @@ export function JobList({
   async function quickStatusChange(e: React.MouseEvent, jobId: string, newStatus: JobStatus) {
     e.stopPropagation(); // don't open the modal
     const updates: Record<string, unknown> = { status: newStatus };
-    const now = new Date().toISOString();
-    if (newStatus === "applied") updates.applied_date = now;
+    // Local calendar date (not ISO timestamp) — see handleStatusChange in modal
+    const today = todayLocal();
+    if (newStatus === "applied") updates.applied_date = today;
     if (newStatus === "interview") updates.interview_date = null;
-    if (newStatus === "archived") updates.archived_date = now;
+    if (newStatus === "archived") updates.archived_date = today;
 
     try {
       const res = await fetch("/api/jobs/update", {
@@ -210,12 +217,13 @@ export function JobList({
   async function bulkChangeStatus(newStatus: JobStatus) {
     if (selectedIds.size === 0) return;
     setBulkActing(true);
-    const now = new Date().toISOString();
+    // Local calendar date (not ISO timestamp) — see handleStatusChange in modal
+    const today = todayLocal();
     const updates: Record<string, unknown> = { status: newStatus };
-    if (newStatus === "applied") updates.applied_date = now;
-    if (newStatus === "archived") updates.archived_date = now;
-    if (newStatus === "rejected") updates.rejected_date = now;
-    if (newStatus === "offer") updates.offer_date = now;
+    if (newStatus === "applied") updates.applied_date = today;
+    if (newStatus === "archived") updates.archived_date = today;
+    if (newStatus === "rejected") updates.rejected_date = today;
+    if (newStatus === "offer") updates.offer_date = today;
 
     try {
       await fetch("/api/jobs/update", {

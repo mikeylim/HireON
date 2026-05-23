@@ -16,6 +16,10 @@ export default function SavedJobsPage() {
       <JobList
         status="saved"
         exportFilename="hireon-saved-jobs"
+        // Default to nearest deadline first — saved jobs are pending action,
+        // so urgency matters more than recency
+        defaultSort="deadline"
+        defaultSortAsc={true}
         emptyIcon={<Bookmark className="mx-auto h-12 w-12 text-[var(--muted)]" />}
         emptyTitle="No saved jobs"
         emptyDescription="Save jobs from the All Jobs page or add them manually."

@@ -19,7 +19,7 @@ import {
   StickyNote,
 } from "lucide-react";
 import type { Job, JobStatus } from "@/lib/types/job";
-import { titleCase, parseDate } from "@/lib/utils";
+import { titleCase, parseDate, todayLocal } from "@/lib/utils";
 import { ApplicationTimeline, type ClearableField } from "./application-timeline";
 
 const STATUS_ACTIONS: {
@@ -173,11 +173,15 @@ export function JobDetailModal({
 
   async function handleStatusChange(newStatus: JobStatus) {
     const updates: Record<string, unknown> = { status: newStatus };
-    const now = new Date().toISOString();
-    if (newStatus === "applied" && !job.applied_date) updates.applied_date = now;
-    if (newStatus === "rejected" && !job.rejected_date) updates.rejected_date = now;
-    if (newStatus === "archived" && !job.archived_date) updates.archived_date = now;
-    if (newStatus === "offer" && !job.offer_date) updates.offer_date = now;
+    // Use local calendar date (e.g. "2026-05-22") instead of an ISO timestamp.
+    // The status dates are conceptually calendar days, not moments in time —
+    // using ISO would cause "applied today" to render as "tomorrow" when the
+    // user is in evening local time (UTC date is a day ahead).
+    const today = todayLocal();
+    if (newStatus === "applied" && !job.applied_date) updates.applied_date = today;
+    if (newStatus === "rejected" && !job.rejected_date) updates.rejected_date = today;
+    if (newStatus === "archived" && !job.archived_date) updates.archived_date = today;
+    if (newStatus === "offer" && !job.offer_date) updates.offer_date = today;
     await updateJob(updates);
     // Auto-jump to the Application tab so the user sees the new status's details
     if (newStatus !== "saved" && newStatus !== "new") setTab("application");
@@ -284,10 +288,15 @@ export function JobDetailModal({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative flex h-[95vh] w-full flex-col rounded-t-2xl border border-[var(--sidebar-border)] bg-[var(--background)] shadow-xl sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:rounded-2xl"
+        className="relative flex h-[100dvh] w-full flex-col border border-[var(--sidebar-border)] bg-[var(--background)] shadow-xl sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:rounded-2xl"
       >
         {/* ═══ Sticky Header ═══ */}
-        <div className="shrink-0 border-b border-[var(--sidebar-border)] p-4 sm:p-5">
+        {/* pt env(safe-area-inset-top) keeps the title clear of the iOS notch / status bar
+            when the modal is full-height on mobile */}
+        <div
+          className="shrink-0 border-b border-[var(--sidebar-border)] p-4 sm:p-5"
+          style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}
+        >
           {/* Title row + close */}
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
@@ -513,7 +522,11 @@ export function JobDetailModal({
         </div>
 
         {/* ═══ Sticky footer ═══ */}
-        <div className="shrink-0 border-t border-[var(--sidebar-border)] bg-[var(--background)] p-3 sm:p-4">
+        {/* pb env(safe-area-inset-bottom) keeps buttons clear of the iOS home indicator */}
+        <div
+          className="shrink-0 border-t border-[var(--sidebar-border)] bg-[var(--background)] p-3 sm:p-4"
+          style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+        >
           <div className="flex items-center justify-between gap-3">
             {/* Left: Delete (with confirmation) */}
             {confirmDelete ? (
