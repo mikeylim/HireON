@@ -798,12 +798,13 @@ function AppliedFields(p: ApplicationTabProps) {
             onChange={(e) => p.setAppliedMethod(e.target.value)}
             className={inputClass}
           >
-            <option value="">Select method...</option>
+            <option value="">— Not specified —</option>
             <option value="company_website">Company Website</option>
+            <option value="school_portal">School / University Career Portal</option>
             <option value="linkedin_easy_apply">LinkedIn Easy Apply</option>
-            <option value="email">Email</option>
-            <option value="referral">Referral</option>
             <option value="job_portal">Job Portal (Indeed, etc.)</option>
+            <option value="referral">Referral</option>
+            <option value="email">Email</option>
             <option value="in_person">In Person / Job Fair</option>
             <option value="other">Other</option>
           </select>
