@@ -830,13 +830,17 @@ function AppliedFields(p: ApplicationTabProps) {
           />
         </div>
         <div>
-          <label className={labelClass}>Follow-up Date</label>
+          <label className={labelClass}>Follow-up Reminder (optional)</label>
           <input
             type="date"
             value={p.appliedFollowUpDate}
             onChange={(e) => p.setAppliedFollowUpDate(e.target.value)}
             className={inputClass}
           />
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            A future date to remind yourself to check back on this application.
+            It&apos;ll appear in your dashboard reminders.
+          </p>
         </div>
       </div>
       <label className="flex items-center gap-2 text-sm">

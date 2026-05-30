@@ -14,6 +14,8 @@ import {
   TrendingUp,
   Sparkles,
   CalendarRange,
+  Check,
+  AlarmClockPlus,
 } from "lucide-react";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 import { titleCase, parseDate, todayLocal } from "@/lib/utils";
@@ -69,11 +71,13 @@ export default function DashboardPage() {
       supabase.from("jobs").select("*", { count: "exact", head: true }).eq("status", "interview"),
       supabase.from("jobs").select("*", { count: "exact", head: true }).eq("status", "offer"),
       supabase.from("jobs").select("*", { count: "exact", head: true }).gte("scraped_at", oneDayAgo),
-      // Deadline alerts: jobs with deadlines in the next 7 days
+      // Deadline alerts: jobs you still need to apply to, with deadlines in the
+      // next 7 days. Only "saved" (and "new") qualify — once applied, the
+      // deadline is no longer an action item, so we exclude those.
       supabase
         .from("jobs")
         .select("*")
-        .in("status", ["saved", "applied"])
+        .in("status", ["saved", "new"])
         .gte("deadline", todayStart)
         .lte("deadline", sevenDaysFromNow)
         .order("deadline", { ascending: true })
@@ -136,6 +140,33 @@ export default function DashboardPage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Mark a follow-up reminder as done — clears the reminder date so it
+  // drops off the dashboard. The job and its other data are untouched.
+  async function markFollowUpDone(jobId: string) {
+    // Optimistically remove from the list for instant feedback
+    setFollowUpJobs((prev) => prev.filter((j) => j.id !== jobId));
+    await fetch("/api/jobs/update", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: jobId, updates: { applied_follow_up_date: null } }),
+    });
+  }
+
+  // Snooze a follow-up reminder by pushing it 7 days into the future.
+  async function snoozeFollowUp(jobId: string, currentDate: string) {
+    const base = parseDate(currentDate) ?? new Date();
+    base.setDate(base.getDate() + 7);
+    const next = `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, "0")}-${String(base.getDate()).padStart(2, "0")}`;
+    // Remove from the visible list — if the new date is still within the
+    // 7-day window it'll reappear on next load, otherwise it's gone for now
+    setFollowUpJobs((prev) => prev.filter((j) => j.id !== jobId));
+    await fetch("/api/jobs/update", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: jobId, updates: { applied_follow_up_date: next } }),
+    });
+  }
 
   return (
     <div className="min-w-0 space-y-8 overflow-hidden">
@@ -245,10 +276,11 @@ export default function DashboardPage() {
             </h2>
           </div>
           {followUpJobs.map((job) => {
-            const followUpDate = new Date(job.applied_follow_up_date!);
+            // parseDate avoids the timezone shift on date-only values
+            const followUpDate = parseDate(job.applied_follow_up_date) ?? new Date();
             const today = new Date();
             today.setHours(0, 0, 0, 0);
-            const daysUntil = Math.ceil(
+            const daysUntil = Math.round(
               (followUpDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
             );
             const isOverdue = daysUntil < 0;
@@ -258,7 +290,7 @@ export default function DashboardPage() {
               <div
                 key={job.id}
                 onClick={() => setSelectedJob(job)}
-                className={`flex cursor-pointer items-center justify-between rounded-xl border p-4 transition-colors hover:border-[var(--primary)] ${
+                className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl border p-4 transition-colors hover:border-[var(--primary)] ${
                   isOverdue
                     ? "border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/20"
                     : isToday
@@ -266,30 +298,57 @@ export default function DashboardPage() {
                       : "border-[var(--sidebar-border)] bg-[var(--sidebar-bg)]"
                 }`}
               >
-                <div>
-                  <h3 className="font-semibold">{titleCase(job.title)}</h3>
-                  <p className="text-sm text-[var(--muted)]">
+                <div className="min-w-0 flex-1">
+                  <h3 className="truncate font-semibold">{titleCase(job.title)}</h3>
+                  <p className="truncate text-sm text-[var(--muted)]">
                     {job.company}
                     {job.applied_date && (
-                      <span> · Applied {new Date(job.applied_date).toLocaleDateString()}</span>
+                      <span> · Applied {parseDate(job.applied_date)?.toLocaleDateString()}</span>
                     )}
                   </p>
                 </div>
-                <span
-                  className={`rounded-full px-3 py-1 text-xs font-bold ${
-                    isOverdue
-                      ? "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300"
+
+                <div className="flex shrink-0 items-center gap-2">
+                  <span
+                    className={`whitespace-nowrap rounded-full px-3 py-1 text-xs font-bold ${
+                      isOverdue
+                        ? "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300"
+                        : isToday
+                          ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
+                          : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"
+                    }`}
+                  >
+                    {isOverdue
+                      ? `${Math.abs(daysUntil)} day${Math.abs(daysUntil) !== 1 ? "s" : ""} overdue`
                       : isToday
-                        ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
-                        : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"
-                  }`}
-                >
-                  {isOverdue
-                    ? `${Math.abs(daysUntil)} day${Math.abs(daysUntil) !== 1 ? "s" : ""} overdue`
-                    : isToday
-                      ? "Follow up today"
-                      : `In ${daysUntil} day${daysUntil !== 1 ? "s" : ""}`}
-                </span>
+                        ? "Follow up today"
+                        : `In ${daysUntil} day${daysUntil !== 1 ? "s" : ""}`}
+                  </span>
+
+                  {/* Snooze +1 week — push the reminder forward */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      snoozeFollowUp(job.id, job.applied_follow_up_date!);
+                    }}
+                    title="Snooze 1 week"
+                    className="rounded-lg border border-[var(--sidebar-border)] p-1.5 text-[var(--muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--foreground)]"
+                  >
+                    <AlarmClockPlus className="h-4 w-4" />
+                  </button>
+
+                  {/* Done — clear the reminder */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      markFollowUpDone(job.id);
+                    }}
+                    title="Mark as followed up"
+                    className="rounded-lg border border-[var(--sidebar-border)] p-1.5 text-[var(--muted)] transition-colors hover:border-[var(--success)] hover:text-[var(--success)]"
+                  >
+                    <Check className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
             );
           })}

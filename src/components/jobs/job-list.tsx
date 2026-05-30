@@ -268,8 +268,10 @@ export function JobList({
 	function getContextLine(
 		job: Job,
 	): { icon: typeof CalendarDays; text: string; urgent?: boolean } | null {
-		// Upcoming deadline is the most urgent thing to show on any page
-		if (job.deadline) {
+		// An upcoming deadline is only relevant BEFORE you apply. Once a job has
+		// moved past "saved", the deadline no longer matters — the status date
+		// (Applied, Interview, etc.) is the meaningful thing to surface instead.
+		if ((job.status === "saved" || job.status === "new") && job.deadline) {
 			const days = relativeTime(job.deadline);
 			const date = parseDate(job.deadline);
 			if (days && date) {
