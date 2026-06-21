@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Save, Loader2, RotateCcw } from "lucide-react";
+import { Save, Loader2, RotateCcw, Settings } from "lucide-react";
+import { PageHeader } from "@/components/layout/page-header";
 import {
   loadSettings,
   saveSettings,
@@ -63,12 +64,12 @@ export default function SettingsPage() {
 
   return (
     <div className="min-w-0 space-y-6 overflow-hidden">
-      <div>
-        <h1 className="text-2xl font-bold">Settings</h1>
-        <p className="text-sm text-[var(--muted)]">
-          Configure your default search preferences and AI scoring context.
-        </p>
-      </div>
+      <PageHeader
+        title="Settings"
+        description="Configure your default search preferences and AI scoring context."
+        icon={Settings}
+        accent="slate"
+      />
 
       {/* Search defaults */}
       <div className="rounded-xl border border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] p-5 space-y-4">

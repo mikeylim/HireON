@@ -12,6 +12,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { ScrapeButton } from "@/components/jobs/scrape-button";
+import { PageHeader } from "@/components/layout/page-header";
 import { usePreview } from "@/components/jobs/preview-context";
 import { titleCase } from "@/lib/utils";
 import type { PreviewJob } from "@/lib/types/preview";
@@ -179,12 +180,12 @@ export default function AllJobsPage() {
 
   return (
     <div className="min-w-0 space-y-6 overflow-hidden">
-      <div>
-        <h1 className="text-2xl font-bold">All Jobs</h1>
-        <p className="text-sm text-[var(--muted)]">
-          Search for new jobs, review with AI scoring, and save the best ones.
-        </p>
-      </div>
+      <PageHeader
+        title="All Jobs"
+        description="Search for new jobs, review with AI scoring, and save the best ones."
+        icon={Briefcase}
+        accent="indigo"
+      />
 
       {/* Scrape controls */}
       <div className="rounded-xl border border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] p-5">

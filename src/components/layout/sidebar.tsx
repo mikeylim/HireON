@@ -26,16 +26,16 @@ import { cn } from "@/lib/utils";
 import { useSidebar } from "./sidebar-context";
 
 const menuItems = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "All Jobs", href: "/dashboard/jobs", icon: Briefcase },
-  { label: "Add Job", href: "/dashboard/add", icon: PlusCircle },
-  { label: "Saved", href: "/dashboard/saved", icon: Bookmark },
-  { label: "Applied", href: "/dashboard/applied", icon: CheckCircle2 },
-  { label: "Interviews", href: "/dashboard/interviews", icon: CalendarClock },
-  { label: "Offers", href: "/dashboard/offers", icon: Trophy },
-  { label: "Archived", href: "/dashboard/archived", icon: XCircle },
-  { label: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
-  { label: "Settings", href: "/dashboard/settings", icon: Settings },
+  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, activeClass: "bg-blue-600 text-white" },
+  { label: "All Jobs", href: "/dashboard/jobs", icon: Briefcase, activeClass: "bg-indigo-600 text-white" },
+  { label: "Add Job", href: "/dashboard/add", icon: PlusCircle, activeClass: "bg-indigo-600 text-white" },
+  { label: "Saved", href: "/dashboard/saved", icon: Bookmark, activeClass: "bg-amber-500 text-white" },
+  { label: "Applied", href: "/dashboard/applied", icon: CheckCircle2, activeClass: "bg-blue-600 text-white" },
+  { label: "Interviews", href: "/dashboard/interviews", icon: CalendarClock, activeClass: "bg-purple-600 text-white" },
+  { label: "Offers", href: "/dashboard/offers", icon: Trophy, activeClass: "bg-green-600 text-white" },
+  { label: "Archived", href: "/dashboard/archived", icon: XCircle, activeClass: "bg-rose-600 text-white" },
+  { label: "Analytics", href: "/dashboard/analytics", icon: BarChart3, activeClass: "bg-cyan-600 text-white" },
+  { label: "Settings", href: "/dashboard/settings", icon: Settings, activeClass: "bg-slate-600 text-white" },
 ];
 
 export function Sidebar() {
@@ -130,7 +130,7 @@ export function Sidebar() {
                   ? "justify-center px-0 py-2.5"
                   : "gap-3 px-3 py-2.5",
                 isActive
-                  ? "bg-[var(--primary)] text-white"
+                  ? item.activeClass
                   : "text-[var(--muted)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
               )}
             >

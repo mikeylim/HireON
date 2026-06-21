@@ -2,16 +2,17 @@
 
 import { XCircle } from "lucide-react";
 import { JobList } from "@/components/jobs/job-list";
+import { PageHeader } from "@/components/layout/page-header";
 
 export default function ArchivedPage() {
   return (
     <div className="min-w-0 space-y-6 overflow-hidden">
-      <div>
-        <h1 className="text-2xl font-bold">Archived</h1>
-        <p className="text-sm text-[var(--muted)]">
-          Rejected, expired, or dismissed jobs. You can restore them from the detail view.
-        </p>
-      </div>
+      <PageHeader
+        title="Archived"
+        description="Rejected, expired, or dismissed jobs. You can restore them from the detail view."
+        icon={XCircle}
+        accent="rose"
+      />
 
       <JobList
         status={["archived", "rejected"]}

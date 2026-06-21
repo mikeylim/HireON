@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Plus, Sparkles, AlertCircle } from "lucide-react";
+import { Loader2, Plus, Sparkles, AlertCircle, PlusCircle } from "lucide-react";
+import { PageHeader } from "@/components/layout/page-header";
 import type { JobStatus, JobType, WorkMode } from "@/lib/types/job";
 
 // All the fields the user can fill in when adding a job manually
@@ -283,12 +284,12 @@ export default function AddJobPage() {
 
   return (
     <div className="min-w-0 space-y-6 overflow-hidden">
-      <div>
-        <h1 className="text-2xl font-bold">Add Job Manually</h1>
-        <p className="text-sm text-[var(--muted)]">
-          Track a job you found on Indeed, Glassdoor, a university portal, or anywhere else.
-        </p>
-      </div>
+      <PageHeader
+        title="Add Job Manually"
+        description="Track a job you found on Indeed, Glassdoor, a university portal, or anywhere else."
+        icon={PlusCircle}
+        accent="indigo"
+      />
 
       {/* ── AI Auto-fill ── */}
       <div className="rounded-xl border border-[var(--primary)]/30 bg-blue-50/50 p-5 space-y-3 dark:bg-blue-950/20">

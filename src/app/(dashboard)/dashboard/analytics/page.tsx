@@ -21,6 +21,7 @@ import {
   Activity,
 } from "lucide-react";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
+import { PageHeader } from "@/components/layout/page-header";
 import type { Job, JobStatus } from "@/lib/types/job";
 
 // Brand colors matching the rest of the app's status system
@@ -140,10 +141,12 @@ export default function AnalyticsPage() {
   if (loading) {
     return (
       <div className="min-w-0 space-y-6 overflow-hidden">
-        <div>
-          <h1 className="text-2xl font-bold">Analytics</h1>
-          <p className="text-sm text-[var(--muted)]">Loading your job search data...</p>
-        </div>
+        <PageHeader
+          title="Analytics"
+          description="Loading your job search data..."
+          icon={BarChart3}
+          accent="cyan"
+        />
       </div>
     );
   }
@@ -151,12 +154,12 @@ export default function AnalyticsPage() {
   if (jobs.length === 0) {
     return (
       <div className="min-w-0 space-y-6 overflow-hidden">
-        <div>
-          <h1 className="text-2xl font-bold">Analytics</h1>
-          <p className="text-sm text-[var(--muted)]">
-            Insights about your job search activity.
-          </p>
-        </div>
+        <PageHeader
+          title="Analytics"
+          description="Insights about your job search activity."
+          icon={BarChart3}
+          accent="cyan"
+        />
         <div className="rounded-xl border border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] p-8 text-center">
           <BarChart3 className="mx-auto h-12 w-12 text-[var(--muted)]" />
           <h3 className="mt-4 text-lg font-semibold">No data yet</h3>
@@ -170,12 +173,12 @@ export default function AnalyticsPage() {
 
   return (
     <div className="min-w-0 space-y-6 overflow-hidden">
-      <div>
-        <h1 className="text-2xl font-bold">Analytics</h1>
-        <p className="text-sm text-[var(--muted)]">
-          Insights about your job search activity.
-        </p>
-      </div>
+      <PageHeader
+        title="Analytics"
+        description="Insights about your job search activity."
+        icon={BarChart3}
+        accent="cyan"
+      />
 
       {/* Top summary numbers */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

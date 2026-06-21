@@ -2,16 +2,17 @@
 
 import { Trophy } from "lucide-react";
 import { JobList } from "@/components/jobs/job-list";
+import { PageHeader } from "@/components/layout/page-header";
 
 export default function OffersPage() {
   return (
     <div className="min-w-0 space-y-6 overflow-hidden">
-      <div>
-        <h1 className="text-2xl font-bold">Offers</h1>
-        <p className="text-sm text-[var(--muted)]">
-          Jobs where you received an offer. Click to add salary details and response deadlines.
-        </p>
-      </div>
+      <PageHeader
+        title="Offers"
+        description="Jobs where you received an offer. Click to add salary details and response deadlines."
+        icon={Trophy}
+        accent="green"
+      />
 
       <JobList
         status="offer"

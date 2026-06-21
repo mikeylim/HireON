@@ -2,16 +2,17 @@
 
 import { Bookmark } from "lucide-react";
 import { JobList } from "@/components/jobs/job-list";
+import { PageHeader } from "@/components/layout/page-header";
 
 export default function SavedJobsPage() {
   return (
     <div className="min-w-0 space-y-6 overflow-hidden">
-      <div>
-        <h1 className="text-2xl font-bold">Saved Jobs</h1>
-        <p className="text-sm text-[var(--muted)]">
-          Jobs you bookmarked for later review. Click any job to change its status or add notes.
-        </p>
-      </div>
+      <PageHeader
+        title="Saved Jobs"
+        description="Jobs you bookmarked for later review. Click any job to change its status or add notes."
+        icon={Bookmark}
+        accent="amber"
+      />
 
       <JobList
         status="saved"

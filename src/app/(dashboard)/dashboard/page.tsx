@@ -16,10 +16,12 @@ import {
   CalendarRange,
   Check,
   AlarmClockPlus,
+  LayoutDashboard,
 } from "lucide-react";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 import { titleCase, parseDate, todayLocal } from "@/lib/utils";
 import { JobDetailModal } from "@/components/jobs/job-detail-modal";
+import { PageHeader } from "@/components/layout/page-header";
 import type { Job } from "@/lib/types/job";
 
 interface StatCard {
@@ -170,12 +172,12 @@ export default function DashboardPage() {
 
   return (
     <div className="min-w-0 space-y-8 overflow-hidden">
-      <div>
-        <h1 className="text-2xl font-bold">Dashboard</h1>
-        <p className="text-sm text-[var(--muted)]">
-          Your Ontario job search at a glance.
-        </p>
-      </div>
+      <PageHeader
+        title="Dashboard"
+        description="Your Ontario job search at a glance."
+        icon={LayoutDashboard}
+        accent="blue"
+      />
 
       {/* Stat cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">

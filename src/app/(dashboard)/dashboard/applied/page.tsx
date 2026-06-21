@@ -2,16 +2,17 @@
 
 import { CheckCircle2 } from "lucide-react";
 import { JobList } from "@/components/jobs/job-list";
+import { PageHeader } from "@/components/layout/page-header";
 
 export default function AppliedJobsPage() {
   return (
     <div className="min-w-0 space-y-6 overflow-hidden">
-      <div>
-        <h1 className="text-2xl font-bold">Applied</h1>
-        <p className="text-sm text-[var(--muted)]">
-          Jobs you&apos;ve submitted applications for. Click to update status when you hear back.
-        </p>
-      </div>
+      <PageHeader
+        title="Applied"
+        description="Jobs you've submitted applications for. Click to update status when you hear back."
+        icon={CheckCircle2}
+        accent="blue"
+      />
 
       <JobList
         status="applied"
