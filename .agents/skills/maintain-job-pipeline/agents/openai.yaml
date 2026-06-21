@@ -1,0 +1,4 @@
+interface:
+  display_name: "Maintain HireON Job Pipeline"
+  short_description: "Safely change job statuses and tracking fields"
+  default_prompt: "Use $maintain-job-pipeline to update HireON tracking across the database, types, API, and UI while preserving pipeline invariants."
