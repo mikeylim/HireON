@@ -70,7 +70,7 @@ AI-powered job search dashboard for Ontario, GTA, and Toronto. Scrapes postings 
 
 ## Tech Stack
 
-- Next.js 15 (App Router) + TypeScript
+- Next.js 16 (App Router) + TypeScript
 - Tailwind CSS v4 + Lucide icons
 - Supabase (PostgreSQL + Auth + RLS)
 - Google Gemini API (gemini-3.5-flash)
