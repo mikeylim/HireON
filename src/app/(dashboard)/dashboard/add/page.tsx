@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Plus, Sparkles, AlertCircle, PlusCircle } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
+import { inferJobSource } from "@/lib/utils";
 import type { JobStatus, JobType, WorkMode } from "@/lib/types/job";
 
 // All the fields the user can fill in when adding a job manually
@@ -80,6 +81,7 @@ const SOURCE_SUGGESTIONS = [
   "Company Website",
   "Referral",
   "Job Fair",
+  "Manual Entry",
   "Other",
 ];
 
@@ -96,6 +98,7 @@ export default function AddJobPage() {
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
   const [parseWarning, setParseWarning] = useState<string | null>(null);
+  const [sourceIsDerived, setSourceIsDerived] = useState(false);
   // Tracks which fields were filled by AI — used for showing the "AI" badge.
   // Once a user edits a field, we remove it from this set so the badge disappears.
   const [aiFilled, setAiFilled] = useState<Set<keyof FormData>>(new Set());
@@ -109,6 +112,19 @@ export default function AddJobPage() {
       next.delete(field);
       return next;
     });
+  }
+
+  function updateUrl(value: string) {
+    update("url", value);
+    const inferredSource = inferJobSource(value);
+
+    if (inferredSource && (!form.source.trim() || sourceIsDerived)) {
+      update("source", inferredSource);
+      setSourceIsDerived(true);
+    } else if (!value.trim() && sourceIsDerived) {
+      update("source", "");
+      setSourceIsDerived(false);
+    }
   }
 
   // Handle AI parse: send URL to server, fill in the form with returned data
@@ -149,6 +165,10 @@ export default function AddJobPage() {
 
       const data = result.data;
       const filledFields = new Set<keyof FormData>();
+      const inferredSource =
+        parseMode === "url" ? inferJobSource(parseUrl) : "";
+      const shouldDeriveSource =
+        Boolean(inferredSource) && (!form.source.trim() || sourceIsDerived);
 
       // Build the new form state, only overwriting fields that came back non-null
       setForm((prev) => {
@@ -158,6 +178,10 @@ export default function AddJobPage() {
         if (parseMode === "url") {
           next.url = parseUrl.trim();
           filledFields.add("url");
+
+          if (shouldDeriveSource) {
+            next.source = inferredSource;
+          }
         }
 
         if (data.title) { next.title = data.title; filledFields.add("title"); }
@@ -182,6 +206,7 @@ export default function AddJobPage() {
         return next;
       });
 
+      if (shouldDeriveSource) setSourceIsDerived(true);
       setAiFilled(filledFields);
       if (result.warning) setParseWarning(result.warning);
     } catch {
@@ -198,10 +223,11 @@ export default function AddJobPage() {
     // Basic validation
     if (!form.title.trim()) return setError("Job title is required.");
     if (!form.company.trim()) return setError("Company name is required.");
-    if (!form.url.trim()) return setError("Job posting URL is required.");
-    if (!form.source.trim()) return setError("Source is required.");
-
     setSaving(true);
+
+    const normalizedUrl = form.url.trim();
+    const source =
+      form.source.trim() || inferJobSource(normalizedUrl) || "Manual Entry";
 
     // Convert salary to annual for consistent storage
     const toAnnual = (val: string): number | null => {
@@ -234,8 +260,8 @@ export default function AddJobPage() {
         title: form.title.trim(),
         company: form.company.trim(),
         location: form.location.trim() || "Toronto, ON",
-        url: form.url.trim(),
-        source: form.source.toLowerCase().trim(),
+        url: normalizedUrl || null,
+        source: source.toLowerCase(),
         description: form.description.trim(),
         job_type: form.job_type,
         work_mode: form.work_mode,
@@ -403,7 +429,7 @@ export default function AddJobPage() {
         )}
         {aiFilled.size > 0 && !parseError && (
           <p className="text-xs text-[var(--success)]">
-            Filled {aiFilled.size} field{aiFilled.size !== 1 ? "s" : ""} from the URL. Review and edit any fields marked with the AI badge below.
+            Filled {aiFilled.size} field{aiFilled.size !== 1 ? "s" : ""} from the {parseMode === "url" ? "URL" : "pasted text"}. Review and edit any fields marked with the AI badge below.
           </p>
         )}
       </div>
@@ -439,24 +465,30 @@ export default function AddJobPage() {
             </div>
 
             <div>
-              <label className={labelClass}>Posting URL *<AIBadge field="url" /></label>
+              <label className={labelClass}>Posting URL (optional)<AIBadge field="url" /></label>
               <input
                 type="url"
                 value={form.url}
-                onChange={(e) => update("url", e.target.value)}
+                onChange={(e) => updateUrl(e.target.value)}
                 placeholder="https://..."
                 className={inputClass}
               />
+              <p className="mt-1 text-xs text-[var(--muted)]">
+                Leave blank for referrals, pasted descriptions, or expired postings.
+              </p>
             </div>
 
             <div>
-              <label className={labelClass}>Source *</label>
+              <label className={labelClass}>Source (optional)</label>
               <input
                 type="text"
                 list="source-suggestions"
                 value={form.source}
-                onChange={(e) => update("source", e.target.value)}
-                placeholder="Where did you find this?"
+                onChange={(e) => {
+                  setSourceIsDerived(false);
+                  update("source", e.target.value);
+                }}
+                placeholder="Automatically inferred from the URL"
                 className={inputClass}
               />
               <datalist id="source-suggestions">
@@ -464,6 +496,9 @@ export default function AddJobPage() {
                   <option key={s} value={s} />
                 ))}
               </datalist>
+              <p className="mt-1 text-xs text-[var(--muted)]">
+                We&apos;ll use Manual Entry when both fields are blank.
+              </p>
             </div>
 
             <div>

@@ -5,6 +5,42 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+// Derive a useful source label from a posting URL. Known job boards and ATS
+// platforms get their own label; employer-hosted links are company websites.
+export function inferJobSource(url: string): string {
+  if (!url.trim()) return "";
+
+  let hostname: string;
+  try {
+    hostname = new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+
+  const sources: Array<[domain: string, label: string]> = [
+    ["jobbank.gc.ca", "Job Bank"],
+    ["adzuna.ca", "Adzuna"],
+    ["adzuna.com", "Adzuna"],
+    ["jooble.org", "Jooble"],
+    ["remotive.com", "Remotive"],
+    ["indeed.ca", "Indeed"],
+    ["indeed.com", "Indeed"],
+    ["linkedin.com", "LinkedIn"],
+    ["glassdoor.ca", "Glassdoor"],
+    ["glassdoor.com", "Glassdoor"],
+    ["greenhouse.io", "Greenhouse"],
+    ["lever.co", "Lever"],
+    ["ashbyhq.com", "Ashby"],
+    ["myworkdayjobs.com", "Workday"],
+  ];
+
+  const match = sources.find(
+    ([domain]) => hostname === domain || hostname.endsWith(`.${domain}`)
+  );
+
+  return match?.[1] ?? "Company Website";
+}
+
 // Capitalize first letter of each word — "full stack developer" → "Full Stack Developer"
 export function titleCase(str: string): string {
   return str.replace(/\b\w/g, (c) => c.toUpperCase());

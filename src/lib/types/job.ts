@@ -27,7 +27,7 @@ export interface Job {
   salary_min: number | null;
   salary_max: number | null;
   description: string;
-  url: string;
+  url: string | null;
   source: string;
   status: JobStatus;
   relevance_score: number | null;

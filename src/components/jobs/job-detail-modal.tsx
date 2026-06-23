@@ -196,7 +196,7 @@ export function JobDetailModal({
       title: title.trim(),
       company: company.trim(),
       location: location.trim(),
-      url: jobUrl.trim(),
+      url: jobUrl.trim() || null,
       description: description.trim(),
       deadline: deadline || null,
       notes,
@@ -381,7 +381,7 @@ export function JobDetailModal({
             )}
             {(jobUrl || job.url) && (
               <a
-                href={jobUrl || job.url}
+                href={jobUrl || job.url || undefined}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-[var(--primary)] hover:underline"
@@ -646,7 +646,7 @@ function OverviewTab({
           </div>
         </div>
         <div>
-          <label className={labelClass}>Posting URL</label>
+          <label className={labelClass}>Posting URL (optional)</label>
           <input
             type="url"
             value={jobUrl}

@@ -61,7 +61,7 @@ export function ExportButton({ statuses, filename = "hireon-jobs" }: ExportButto
         job.salary_min ?? "",
         job.salary_max ?? "",
         job.relevance_score ?? "",
-        job.url,
+        job.url ?? "",
         parseDate(job.posted_at)?.toLocaleDateString() ?? "",
         parseDate(job.deadline)?.toLocaleDateString() ?? "",
         parseDate(job.applied_date)?.toLocaleDateString() ?? "",
