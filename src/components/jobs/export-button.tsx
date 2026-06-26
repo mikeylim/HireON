@@ -47,6 +47,7 @@ export function ExportButton({ statuses, filename = "hireon-jobs" }: ExportButto
         "Posted",
         "Deadline",
         "Applied Date",
+        "Resume Version",
         "Notes",
       ];
 
@@ -65,6 +66,7 @@ export function ExportButton({ statuses, filename = "hireon-jobs" }: ExportButto
         parseDate(job.posted_at)?.toLocaleDateString() ?? "",
         parseDate(job.deadline)?.toLocaleDateString() ?? "",
         parseDate(job.applied_date)?.toLocaleDateString() ?? "",
+        escape(job.applied_resume_version ?? ""),
         escape(job.notes ?? ""),
       ]);
 

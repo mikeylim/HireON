@@ -19,6 +19,7 @@ import {
   StickyNote,
 } from "lucide-react";
 import type { Job, JobStatus } from "@/lib/types/job";
+import { createBrowserSupabase } from "@/lib/supabase/browser";
 import { titleCase, parseDate, todayLocal } from "@/lib/utils";
 import { ApplicationTimeline, type ClearableField } from "./application-timeline";
 
@@ -55,6 +56,35 @@ interface JobDetailModalProps {
 const inputClass =
   "w-full rounded-lg border border-[var(--sidebar-border)] bg-[var(--accent)] px-3 py-2 text-sm outline-none placeholder:text-[var(--muted)] focus:border-[var(--primary)]";
 const labelClass = "block text-xs font-medium text-[var(--muted)] mb-1";
+
+function normalizeResumeVersion(value: string | null | undefined): string {
+  return value?.trim() ?? "";
+}
+
+function addResumeVersionOption(options: string[], value: string | null | undefined): string[] {
+  const normalized = normalizeResumeVersion(value);
+  if (!normalized) return options;
+
+  const alreadyExists = options.some(
+    (option) => option.toLocaleLowerCase() === normalized.toLocaleLowerCase()
+  );
+  if (alreadyExists) return options;
+
+  return [...options, normalized].sort((a, b) =>
+    a.localeCompare(b, undefined, { sensitivity: "base" })
+  );
+}
+
+function findResumeVersionOption(options: string[], value: string): string {
+  const normalized = normalizeResumeVersion(value);
+  if (!normalized) return "";
+
+  return (
+    options.find(
+      (option) => option.toLocaleLowerCase() === normalized.toLocaleLowerCase()
+    ) ?? ""
+  );
+}
 
 export function JobDetailModal({
   job,
@@ -110,6 +140,9 @@ export function JobDetailModal({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [resumeVersionOptions, setResumeVersionOptions] = useState<string[]>([]);
+  const [resumeVersionsLoading, setResumeVersionsLoading] = useState(false);
+  const [resumeVersionsError, setResumeVersionsError] = useState<string | null>(null);
 
   // ── Effects ──────────────────────────────────────────────────────────────
 
@@ -152,6 +185,47 @@ export function JobDetailModal({
     setArchivedDate(job.archived_date?.slice(0, 10) ?? "");
   }, [job]);
 
+  // Reuse resume-version names already saved on this user's jobs.
+  // RLS keeps this query scoped to the logged-in user.
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadResumeVersions() {
+      setResumeVersionsLoading(true);
+      setResumeVersionsError(null);
+
+      const supabase = createBrowserSupabase();
+      const { data, error } = await supabase
+        .from("jobs")
+        .select("applied_resume_version")
+        .not("applied_resume_version", "is", null)
+        .order("applied_resume_version", { ascending: true });
+
+      if (ignore) return;
+
+      if (error) {
+        console.error("Failed to load resume versions:", error);
+        setResumeVersionsError("Saved resume versions could not be loaded.");
+        setResumeVersionOptions(addResumeVersionOption([], job.applied_resume_version));
+      } else {
+        const rows = (data ?? []) as Array<{ applied_resume_version: string | null }>;
+        const options = rows.reduce<string[]>(
+          (acc, row) => addResumeVersionOption(acc, row.applied_resume_version),
+          addResumeVersionOption([], job.applied_resume_version)
+        );
+        setResumeVersionOptions(options);
+      }
+
+      setResumeVersionsLoading(false);
+    }
+
+    loadResumeVersions();
+
+    return () => {
+      ignore = true;
+    };
+  }, [job.applied_resume_version]);
+
   // ── Handlers ─────────────────────────────────────────────────────────────
 
   async function updateJob(updates: Record<string, unknown>) {
@@ -163,7 +237,13 @@ export function JobDetailModal({
         body: JSON.stringify({ id: job.id, updates }),
       });
       const result = await res.json();
-      if (result.data) onUpdate(result.data);
+      if (result.data) {
+        const updatedJob = result.data as Job;
+        setResumeVersionOptions((prev) =>
+          addResumeVersionOption(prev, updatedJob.applied_resume_version)
+        );
+        onUpdate(updatedJob);
+      }
     } catch (err) {
       console.error("Update failed:", err);
     } finally {
@@ -202,7 +282,7 @@ export function JobDetailModal({
       notes,
       applied_date: appliedDate || null,
       applied_method: appliedMethod || null,
-      applied_resume_version: appliedResumeVersion || null,
+      applied_resume_version: normalizeResumeVersion(appliedResumeVersion) || null,
       applied_cover_letter: appliedCoverLetter,
       applied_referral: appliedReferral || null,
       applied_follow_up_date: appliedFollowUpDate || null,
@@ -462,6 +542,9 @@ export function JobDetailModal({
               setAppliedMethod={setAppliedMethod}
               appliedResumeVersion={appliedResumeVersion}
               setAppliedResumeVersion={setAppliedResumeVersion}
+              resumeVersionOptions={resumeVersionOptions}
+              resumeVersionsLoading={resumeVersionsLoading}
+              resumeVersionsError={resumeVersionsError}
               appliedCoverLetter={appliedCoverLetter}
               setAppliedCoverLetter={setAppliedCoverLetter}
               appliedReferral={appliedReferral}
@@ -722,6 +805,9 @@ interface ApplicationTabProps {
   setAppliedMethod: (v: string) => void;
   appliedResumeVersion: string;
   setAppliedResumeVersion: (v: string) => void;
+  resumeVersionOptions: string[];
+  resumeVersionsLoading: boolean;
+  resumeVersionsError: string | null;
   appliedCoverLetter: boolean;
   setAppliedCoverLetter: (v: boolean) => void;
   appliedReferral: string;
@@ -775,7 +861,7 @@ function ApplicationTab(props: ApplicationTabProps) {
 
   return (
     <div className="space-y-4">
-      {job.status === "applied" && <AppliedFields {...props} />}
+      <AppliedFields {...props} />
       {job.status === "interview" && <InterviewFields {...props} />}
       {job.status === "offer" && <OfferFields {...props} />}
       {job.status === "rejected" && <RejectedFields {...props} />}
@@ -785,6 +871,11 @@ function ApplicationTab(props: ApplicationTabProps) {
 }
 
 function AppliedFields(p: ApplicationTabProps) {
+  const selectedResumeOption = findResumeVersionOption(
+    p.resumeVersionOptions,
+    p.appliedResumeVersion
+  );
+
   return (
     <div className="space-y-3 rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950/30">
       <h3 className="text-sm font-semibold text-blue-700 dark:text-blue-300">
@@ -809,15 +900,47 @@ function AppliedFields(p: ApplicationTabProps) {
             <option value="other">Other</option>
           </select>
         </div>
-        <div>
+        <div className="sm:col-span-2">
           <label className={labelClass}>Resume Version</label>
-          <input
-            type="text"
-            value={p.appliedResumeVersion}
-            onChange={(e) => p.setAppliedResumeVersion(e.target.value)}
-            placeholder="e.g. Resume_v3_Frontend.pdf"
-            className={inputClass}
-          />
+          <div
+            className={`grid gap-2 ${
+              p.resumeVersionOptions.length > 0 ? "sm:grid-cols-2" : ""
+            }`}
+          >
+            {p.resumeVersionOptions.length > 0 && (
+              <select
+                value={selectedResumeOption}
+                onChange={(e) => p.setAppliedResumeVersion(e.target.value)}
+                className={inputClass}
+              >
+                <option value="">Select saved version...</option>
+                {p.resumeVersionOptions.map((version) => (
+                  <option key={version} value={version}>
+                    {version}
+                  </option>
+                ))}
+              </select>
+            )}
+            <input
+              type="text"
+              value={p.appliedResumeVersion}
+              onChange={(e) => p.setAppliedResumeVersion(e.target.value)}
+              placeholder="e.g. Frontend v3, Backend ATS, Resume_v4.pdf"
+              className={inputClass}
+            />
+          </div>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            {p.resumeVersionsLoading
+              ? "Loading saved resume versions..."
+              : p.resumeVersionOptions.length > 0
+                ? "Select a saved version or type a new one. Saving a new value adds it to this dropdown for future applications."
+                : "Type the version you used. After saving, it will be available as a dropdown option next time."}
+          </p>
+          {p.resumeVersionsError && (
+            <p className="mt-1 text-xs text-[var(--destructive)]">
+              {p.resumeVersionsError} You can still type a version manually.
+            </p>
+          )}
         </div>
         <div>
           <label className={labelClass}>Referral Contact</label>
