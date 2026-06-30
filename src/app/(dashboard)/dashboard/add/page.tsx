@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Plus, Sparkles, AlertCircle, PlusCircle } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
-import { inferJobSource } from "@/lib/utils";
+import { inferJobSource, todayLocal } from "@/lib/utils";
 import type { JobStatus, JobType, WorkMode } from "@/lib/types/job";
 
 // All the fields the user can fill in when adding a job manually
@@ -84,6 +84,33 @@ const SOURCE_SUGGESTIONS = [
   "Manual Entry",
   "Other",
 ];
+
+const STATUS_REDIRECTS: Partial<Record<JobStatus, string>> = {
+  applied: "/dashboard/applied",
+  interview: "/dashboard/interviews",
+  offer: "/dashboard/offers",
+};
+
+function getInitialStatusDates(status: JobStatus): Record<string, string> {
+  const today = todayLocal();
+
+  switch (status) {
+    case "applied":
+      return { applied_date: today };
+    case "interview":
+      return {
+        applied_date: today,
+        interview_date: today,
+      };
+    case "offer":
+      return {
+        applied_date: today,
+        offer_date: today,
+      };
+    default:
+      return {};
+  }
+}
 
 export default function AddJobPage() {
   const router = useRouter();
@@ -271,6 +298,7 @@ export default function AddJobPage() {
         deadline: form.deadline || null,
         notes,
         tags: [],
+        ...getInitialStatusDates(form.status),
       }),
     });
 
@@ -282,14 +310,8 @@ export default function AddJobPage() {
       return;
     }
 
-    // Redirect to the relevant page based on the status they chose
-    if (form.status === "applied") {
-      router.push("/dashboard/applied");
-    } else if (form.status === "interview") {
-      router.push("/dashboard/interviews");
-    } else {
-      router.push("/dashboard/saved");
-    }
+    // Redirect to the relevant page based on the status they chose.
+    router.push(STATUS_REDIRECTS[form.status] ?? "/dashboard/saved");
   }
 
   const inputClass =
