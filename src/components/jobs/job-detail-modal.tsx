@@ -19,7 +19,7 @@ import {
   StickyNote,
 } from "lucide-react";
 import type { Job, JobStatus } from "@/lib/types/job";
-import { createBrowserSupabase } from "@/lib/supabase/browser";
+import type { ResumeVersion } from "@/lib/types/resume-version";
 import { titleCase, parseDate, todayLocal } from "@/lib/utils";
 import { ApplicationTimeline, type ClearableField } from "./application-timeline";
 
@@ -185,8 +185,9 @@ export function JobDetailModal({
     setArchivedDate(job.archived_date?.slice(0, 10) ?? "");
   }, [job]);
 
-  // Reuse resume-version names already saved on this user's jobs.
-  // RLS keeps this query scoped to the logged-in user.
+  // Reuse resume-version names from the user's saved dropdown library.
+  // The current job's value is also included so historical records still display
+  // even after a reusable option is removed from Settings.
   useEffect(() => {
     let ignore = false;
 
@@ -194,29 +195,31 @@ export function JobDetailModal({
       setResumeVersionsLoading(true);
       setResumeVersionsError(null);
 
-      const supabase = createBrowserSupabase();
-      const { data, error } = await supabase
-        .from("jobs")
-        .select("applied_resume_version")
-        .not("applied_resume_version", "is", null)
-        .order("applied_resume_version", { ascending: true });
+      try {
+        const res = await fetch("/api/resume-versions");
+        const result = await res.json();
 
-      if (ignore) return;
+        if (ignore) return;
 
-      if (error) {
-        console.error("Failed to load resume versions:", error);
-        setResumeVersionsError("Saved resume versions could not be loaded.");
-        setResumeVersionOptions(addResumeVersionOption([], job.applied_resume_version));
-      } else {
-        const rows = (data ?? []) as Array<{ applied_resume_version: string | null }>;
+        if (!res.ok || result.error) {
+          throw new Error(result.error ?? "Failed to load resume versions.");
+        }
+
+        const rows = (result.data ?? []) as ResumeVersion[];
         const options = rows.reduce<string[]>(
-          (acc, row) => addResumeVersionOption(acc, row.applied_resume_version),
+          (acc, row) => addResumeVersionOption(acc, row.name),
           addResumeVersionOption([], job.applied_resume_version)
         );
         setResumeVersionOptions(options);
+      } catch (err) {
+        console.error("Failed to load resume versions:", err);
+        if (!ignore) {
+          setResumeVersionsError("Saved resume versions could not be loaded.");
+          setResumeVersionOptions(addResumeVersionOption([], job.applied_resume_version));
+        }
+      } finally {
+        if (!ignore) setResumeVersionsLoading(false);
       }
-
-      setResumeVersionsLoading(false);
     }
 
     loadResumeVersions();
@@ -228,7 +231,32 @@ export function JobDetailModal({
 
   // ── Handlers ─────────────────────────────────────────────────────────────
 
-  async function updateJob(updates: Record<string, unknown>) {
+  async function saveResumeVersionOption(value: string | null | undefined) {
+    const name = normalizeResumeVersion(value);
+    if (!name) return;
+
+    setResumeVersionOptions((prev) => addResumeVersionOption(prev, name));
+
+    try {
+      const res = await fetch("/api/resume-versions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const result = await res.json();
+
+      if (!res.ok || result.error) {
+        throw new Error(result.error ?? "Failed to save resume version.");
+      }
+
+      const version = result.data as ResumeVersion;
+      setResumeVersionOptions((prev) => addResumeVersionOption(prev, version.name));
+    } catch (err) {
+      console.error("Failed to save resume version option:", err);
+    }
+  }
+
+  async function updateJob(updates: Record<string, unknown>): Promise<Job | null> {
     setSaving(true);
     try {
       const res = await fetch("/api/jobs/update", {
@@ -237,18 +265,25 @@ export function JobDetailModal({
         body: JSON.stringify({ id: job.id, updates }),
       });
       const result = await res.json();
+      if (!res.ok || result.error) {
+        throw new Error(result.error ?? "Update failed.");
+      }
+
       if (result.data) {
         const updatedJob = result.data as Job;
         setResumeVersionOptions((prev) =>
           addResumeVersionOption(prev, updatedJob.applied_resume_version)
         );
         onUpdate(updatedJob);
+        return updatedJob;
       }
     } catch (err) {
       console.error("Update failed:", err);
     } finally {
       setSaving(false);
     }
+
+    return null;
   }
 
   async function handleStatusChange(newStatus: JobStatus) {
@@ -272,6 +307,10 @@ export function JobDetailModal({
   }
 
   async function handleSaveDetails() {
+    const resumeVersionChanged =
+      normalizeResumeVersion(appliedResumeVersion) !==
+      normalizeResumeVersion(job.applied_resume_version);
+
     const updates: Record<string, unknown> = {
       title: title.trim(),
       company: company.trim(),
@@ -299,7 +338,10 @@ export function JobDetailModal({
       archive_reason: archiveReason || null,
       archived_date: archivedDate || null,
     };
-    await updateJob(updates);
+    const updatedJob = await updateJob(updates);
+    if (resumeVersionChanged) {
+      await saveResumeVersionOption(updatedJob?.applied_resume_version);
+    }
   }
 
   async function handleDelete() {
