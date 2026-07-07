@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Plus, Sparkles, AlertCircle, PlusCircle } from "lucide-react";
+import { Loader2, Plus, Sparkles, AlertCircle, PlusCircle, Briefcase } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { inferJobSource, todayLocal } from "@/lib/utils";
 import type { JobStatus, JobType, WorkMode } from "@/lib/types/job";
+import type { ResumeVersion } from "@/lib/types/resume-version";
 
 // All the fields the user can fill in when adding a job manually
 type SalaryPeriod = "annual" | "monthly" | "hourly";
@@ -25,6 +26,12 @@ interface FormData {
   salary_period: SalaryPeriod;
   deadline: string;
   notes: string;
+  applied_date: string;
+  applied_method: string;
+  applied_resume_version: string;
+  applied_cover_letter: boolean;
+  applied_referral: string;
+  applied_follow_up_date: string;
   has_duration: boolean;     // whether the contract/internship/temp has a fixed duration
   duration_value: string;    // e.g. "6"
   duration_unit: "months" | "years";
@@ -45,6 +52,12 @@ const INITIAL_FORM: FormData = {
   salary_period: "annual",
   deadline: "",
   notes: "",
+  applied_date: "",
+  applied_method: "",
+  applied_resume_version: "",
+  applied_cover_letter: false,
+  applied_referral: "",
+  applied_follow_up_date: "",
   has_duration: false,
   duration_value: "",
   duration_unit: "months",
@@ -72,6 +85,17 @@ const STATUSES: { value: JobStatus; label: string }[] = [
   { value: "offer", label: "Offer" },
 ];
 
+const APPLICATION_METHODS = [
+  { value: "company_website", label: "Company Website" },
+  { value: "school_portal", label: "School / University Career Portal" },
+  { value: "linkedin_easy_apply", label: "LinkedIn Easy Apply" },
+  { value: "job_portal", label: "Job Portal (Indeed, etc.)" },
+  { value: "referral", label: "Referral" },
+  { value: "email", label: "Email" },
+  { value: "in_person", label: "In Person / Job Fair" },
+  { value: "other", label: "Other" },
+];
+
 // Common sources for the dropdown hint — user can also type their own
 const SOURCE_SUGGESTIONS = [
   "Indeed",
@@ -91,20 +115,54 @@ const STATUS_REDIRECTS: Partial<Record<JobStatus, string>> = {
   offer: "/dashboard/offers",
 };
 
-function getInitialStatusDates(status: JobStatus): Record<string, string> {
+function shouldShowApplicationDetails(status: JobStatus): boolean {
+  return status === "applied" || status === "interview" || status === "offer";
+}
+
+function normalizeResumeVersion(value: string | null | undefined): string {
+  return value?.trim().replace(/\s+/g, " ") ?? "";
+}
+
+function addResumeVersionOption(options: string[], value: string | null | undefined): string[] {
+  const normalized = normalizeResumeVersion(value);
+  if (!normalized) return options;
+
+  const alreadyExists = options.some(
+    (option) => option.toLocaleLowerCase() === normalized.toLocaleLowerCase()
+  );
+  if (alreadyExists) return options;
+
+  return [...options, normalized].sort((a, b) =>
+    a.localeCompare(b, undefined, { sensitivity: "base" })
+  );
+}
+
+function findResumeVersionOption(options: string[], value: string): string {
+  const normalized = normalizeResumeVersion(value);
+  if (!normalized) return "";
+
+  return (
+    options.find(
+      (option) => option.toLocaleLowerCase() === normalized.toLocaleLowerCase()
+    ) ?? ""
+  );
+}
+
+function getInitialStatusDates(status: JobStatus, appliedDate: string): Record<string, string> {
   const today = todayLocal();
+  const resolvedAppliedDate = appliedDate || today;
 
   switch (status) {
     case "applied":
-      return { applied_date: today };
+      return { applied_date: resolvedAppliedDate };
     case "interview":
       return {
-        applied_date: today,
+        applied_date: resolvedAppliedDate,
         interview_date: today,
       };
     case "offer":
       return {
-        applied_date: today,
+        applied_date: resolvedAppliedDate,
         offer_date: today,
       };
     default:
@@ -126,12 +184,55 @@ export default function AddJobPage() {
   const [parseError, setParseError] = useState<string | null>(null);
   const [parseWarning, setParseWarning] = useState<string | null>(null);
   const [sourceIsDerived, setSourceIsDerived] = useState(false);
+  const [resumeVersionOptions, setResumeVersionOptions] = useState<string[]>([]);
+  const [resumeVersionsLoading, setResumeVersionsLoading] = useState(false);
+  const [resumeVersionsError, setResumeVersionsError] = useState<string | null>(null);
   // Tracks which fields were filled by AI — used for showing the "AI" badge.
   // Once a user edits a field, we remove it from this set so the badge disappears.
   const [aiFilled, setAiFilled] = useState<Set<keyof FormData>>(new Set());
 
-  function update(field: keyof FormData, value: string) {
-    setForm((prev) => ({ ...prev, [field]: value }));
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadResumeVersions() {
+      setResumeVersionsLoading(true);
+      setResumeVersionsError(null);
+
+      try {
+        const res = await fetch("/api/resume-versions");
+        const result = await res.json();
+
+        if (ignore) return;
+
+        if (!res.ok || result.error) {
+          throw new Error(result.error ?? "Failed to load resume versions.");
+        }
+
+        const rows = (result.data ?? []) as ResumeVersion[];
+        const options = rows.reduce<string[]>(
+          (acc, row) => addResumeVersionOption(acc, row.name),
+          []
+        );
+        setResumeVersionOptions(options);
+      } catch (err) {
+        console.error("Failed to load resume versions:", err);
+        if (!ignore) {
+          setResumeVersionsError("Saved resume versions could not be loaded.");
+        }
+      } finally {
+        if (!ignore) setResumeVersionsLoading(false);
+      }
+    }
+
+    loadResumeVersions();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  function update(field: keyof FormData, value: string | boolean) {
+    setForm((prev) => ({ ...prev, [field]: value }) as FormData);
     // User just modified this field — it's no longer "AI-filled"
     setAiFilled((prev) => {
       if (!prev.has(field)) return prev;
@@ -139,6 +240,17 @@ export default function AddJobPage() {
       next.delete(field);
       return next;
     });
+  }
+
+  function updateStatus(status: JobStatus) {
+    setForm((prev) => ({
+      ...prev,
+      status,
+      applied_date:
+        shouldShowApplicationDetails(status) && !prev.applied_date
+          ? todayLocal()
+          : prev.applied_date,
+    }));
   }
 
   function updateUrl(value: string) {
@@ -151,6 +263,33 @@ export default function AddJobPage() {
     } else if (!value.trim() && sourceIsDerived) {
       update("source", "");
       setSourceIsDerived(false);
+    }
+  }
+
+  async function saveResumeVersionOption(value: string) {
+    const name = normalizeResumeVersion(value);
+    if (!name) return;
+
+    setResumeVersionOptions((prev) => addResumeVersionOption(prev, name));
+
+    try {
+      const res = await fetch("/api/resume-versions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const result = await res.json();
+
+      if (!res.ok || result.error) {
+        throw new Error(result.error ?? "Failed to save resume version.");
+      }
+
+      const version = result.data as ResumeVersion;
+      setResumeVersionOptions((prev) => addResumeVersionOption(prev, version.name));
+    } catch (err) {
+      // The job still stores the typed resume version. Failing to save the
+      // reusable dropdown option should not block the application record.
+      console.error("Failed to save resume version option:", err);
     }
   }
 
@@ -280,6 +419,17 @@ export default function AddJobPage() {
     // Combine user notes with duration info
     const notes = [durationNote, form.notes.trim()].filter(Boolean).join("\n");
 
+    const normalizedResumeVersion = normalizeResumeVersion(form.applied_resume_version);
+    const applicationDetails = shouldShowApplicationDetails(form.status)
+      ? {
+          applied_method: form.applied_method || null,
+          applied_resume_version: normalizedResumeVersion || null,
+          applied_cover_letter: form.applied_cover_letter,
+          applied_referral: form.applied_referral.trim() || null,
+          applied_follow_up_date: form.applied_follow_up_date || null,
+        }
+      : {};
+
     const res = await fetch("/api/jobs/add", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -298,7 +448,8 @@ export default function AddJobPage() {
         deadline: form.deadline || null,
         notes,
         tags: [],
-        ...getInitialStatusDates(form.status),
+        ...applicationDetails,
+        ...getInitialStatusDates(form.status, form.applied_date),
       }),
     });
 
@@ -308,6 +459,10 @@ export default function AddJobPage() {
     if (result.error) {
       setError(result.error);
       return;
+    }
+
+    if (shouldShowApplicationDetails(form.status)) {
+      await saveResumeVersionOption(normalizedResumeVersion);
     }
 
     // Redirect to the relevant page based on the status they chose.
@@ -329,6 +484,11 @@ export default function AddJobPage() {
       </span>
     );
   }
+
+  const selectedResumeOption = findResumeVersionOption(
+    resumeVersionOptions,
+    form.applied_resume_version
+  );
 
   return (
     <div className="min-w-0 space-y-6 overflow-hidden">
@@ -604,7 +764,7 @@ export default function AddJobPage() {
               <label className={labelClass}>Status</label>
               <select
                 value={form.status}
-                onChange={(e) => update("status", e.target.value)}
+                onChange={(e) => updateStatus(e.target.value as JobStatus)}
                 className={inputClass}
               >
                 {STATUSES.map((s) => (
@@ -654,6 +814,132 @@ export default function AddJobPage() {
             </div>
           )}
         </div>
+
+        {shouldShowApplicationDetails(form.status) && (
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-5 space-y-4 dark:border-blue-900 dark:bg-blue-950/30">
+            <div className="flex items-start gap-3">
+              <Briefcase className="mt-0.5 h-5 w-5 shrink-0 text-blue-600 dark:text-blue-300" />
+              <div>
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-200">
+                  Application Details
+                </h2>
+                <p className="mt-1 text-xs text-blue-900/70 dark:text-blue-100/70">
+                  Because this job is marked as {form.status}, capture how you
+                  applied now so you do not need to reopen the job from the
+                  Applied page.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div>
+                <label className={labelClass}>How did you apply?</label>
+                <select
+                  value={form.applied_method}
+                  onChange={(e) => update("applied_method", e.target.value)}
+                  className={inputClass}
+                >
+                  <option value="">— Not specified —</option>
+                  {APPLICATION_METHODS.map((method) => (
+                    <option key={method.value} value={method.value}>
+                      {method.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className={labelClass}>Date Applied</label>
+                <input
+                  type="date"
+                  value={form.applied_date}
+                  onChange={(e) => update("applied_date", e.target.value)}
+                  className={inputClass}
+                />
+                <p className="mt-1 text-xs text-[var(--muted)]">
+                  Defaults to today when you choose Applied, Interview, or Offer.
+                </p>
+              </div>
+
+              <div className="md:col-span-2">
+                <label className={labelClass}>Resume Version</label>
+                <div
+                  className={`grid gap-2 ${
+                    resumeVersionOptions.length > 0 ? "md:grid-cols-2" : ""
+                  }`}
+                >
+                  {resumeVersionOptions.length > 0 && (
+                    <select
+                      value={selectedResumeOption}
+                      onChange={(e) => update("applied_resume_version", e.target.value)}
+                      className={inputClass}
+                    >
+                      <option value="">Select saved version...</option>
+                      {resumeVersionOptions.map((version) => (
+                        <option key={version} value={version}>
+                          {version}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <input
+                    type="text"
+                    value={form.applied_resume_version}
+                    onChange={(e) => update("applied_resume_version", e.target.value)}
+                    placeholder="e.g. Frontend v3, Backend ATS, Resume_v4.pdf"
+                    className={inputClass}
+                  />
+                </div>
+                <p className="mt-1 text-xs text-[var(--muted)]">
+                  {resumeVersionsLoading
+                    ? "Loading saved resume versions..."
+                    : resumeVersionOptions.length > 0
+                      ? "Select a saved version or type a new one. New values are saved for future applications."
+                      : "Type the version you used. After saving, it will be available next time."}
+                </p>
+                {resumeVersionsError && (
+                  <p className="mt-1 text-xs text-[var(--destructive)]">
+                    {resumeVersionsError} You can still type a version manually.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className={labelClass}>Referral Contact</label>
+                <input
+                  type="text"
+                  value={form.applied_referral}
+                  onChange={(e) => update("applied_referral", e.target.value)}
+                  placeholder="Name, email, or relationship"
+                  className={inputClass}
+                />
+              </div>
+
+              <div>
+                <label className={labelClass}>Follow-up Reminder</label>
+                <input
+                  type="date"
+                  value={form.applied_follow_up_date}
+                  onChange={(e) => update("applied_follow_up_date", e.target.value)}
+                  className={inputClass}
+                />
+                <p className="mt-1 text-xs text-[var(--muted)]">
+                  Optional. It will appear in dashboard reminders.
+                </p>
+              </div>
+            </div>
+
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={form.applied_cover_letter}
+                onChange={(e) => update("applied_cover_letter", e.target.checked)}
+                className="h-4 w-4 rounded border-[var(--sidebar-border)] accent-[var(--primary)]"
+              />
+              Submitted a cover letter
+            </label>
+          </div>
+        )}
 
         {/* ── Salary & Notes ── */}
         <div className="rounded-xl border border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] p-5 space-y-4">
