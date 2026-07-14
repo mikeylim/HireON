@@ -1,4 +1,5 @@
 import axios from "axios";
+import { getGeminiGenerateContentUrl } from "@/lib/gemini/config";
 
 // Sends a batch of jobs to Gemini and gets back relevance scores (0-100).
 // We batch them into a single prompt to minimize API calls.
@@ -17,9 +18,6 @@ interface ScoredResult {
   score: number;
   reason: string;
 }
-
-const GEMINI_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent";
 
 export async function scoreJobs(
   jobs: JobForScoring[],
@@ -61,8 +59,9 @@ Respond ONLY with valid JSON array, no markdown, no explanation:
 Every job must have an entry. Keep reasons under 15 words.`;
 
   try {
+    const geminiUrl = getGeminiGenerateContentUrl();
     const { data } = await axios.post(
-      `${GEMINI_URL}?key=${apiKey}`,
+      `${geminiUrl}?key=${apiKey}`,
       {
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {

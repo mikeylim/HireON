@@ -1,4 +1,5 @@
 import axios from "axios";
+import { getGeminiGenerateContentUrl } from "@/lib/gemini/config";
 
 // What we extract from a job posting URL — every field is nullable so Gemini
 // can return null when uncertain instead of hallucinating
@@ -18,9 +19,6 @@ export interface ParsedJob {
   notes: string | null;          // application tips, required docs, contact info, etc.
 }
 
-const GEMINI_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent";
-
 // Send page content to Gemini and get structured job fields back
 export async function parseJobFromContent(
   pageContent: string,
@@ -28,6 +26,7 @@ export async function parseJobFromContent(
 ): Promise<ParsedJob> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY is not configured");
+  const geminiUrl = getGeminiGenerateContentUrl();
 
   // Truncate to keep within token budget. 12000 chars (~3000 tokens) gives
   // enough room to capture metadata that often appears below the main description
@@ -87,7 +86,7 @@ ${trimmed}`;
   let data;
   try {
     const response = await axios.post(
-      `${GEMINI_URL}?key=${apiKey}`,
+      `${geminiUrl}?key=${apiKey}`,
       {
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
@@ -224,11 +223,12 @@ CRITICAL:
 - If you can't confidently extract a field, set it to null.
 
 Raw text:
-${trimmed}`;
+  ${trimmed}`;
 
   try {
+    const geminiUrl = getGeminiGenerateContentUrl();
     const response = await axios.post(
-      `${GEMINI_URL}?key=${apiKey}`,
+      `${geminiUrl}?key=${apiKey}`,
       {
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {

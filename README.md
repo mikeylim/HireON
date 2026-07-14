@@ -73,7 +73,7 @@ AI-powered job search dashboard for Ontario, GTA, and Toronto. Scrapes postings 
 - Next.js 16 (App Router) + TypeScript
 - Tailwind CSS v4 + Lucide icons
 - Supabase (PostgreSQL + Auth + RLS)
-- Google Gemini API (gemini-3.5-flash)
+- Google Gemini API (model selected with `GEMINI_MODEL`)
 - Recharts for analytics
 - Cheerio + Axios for scraping
 - Vercel for deployment
