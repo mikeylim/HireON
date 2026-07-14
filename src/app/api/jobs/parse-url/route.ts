@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
 import * as cheerio from "cheerio";
 import { getAuthUser } from "@/lib/supabase/auth";
-import { parseJobFromContent, enhanceDescriptionAndNotes } from "@/lib/gemini/parse-url";
+import {
+  GeminiRequestError,
+  parseJobFromContent,
+  enhanceDescriptionAndNotes,
+} from "@/lib/gemini/parse-url";
 import { tryAdapters } from "@/lib/ats";
 
 // Description length cap stored in DB after Gemini enhancement (or as a fallback
@@ -67,7 +71,8 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ data: parsed, warning: null });
       } catch (err) {
         const message = err instanceof Error ? err.message : "AI parsing failed";
-        return NextResponse.json({ error: message }, { status: 500 });
+        const status = err instanceof GeminiRequestError ? err.statusCode : 500;
+        return NextResponse.json({ error: message }, { status });
       }
     }
 
@@ -218,7 +223,8 @@ export async function POST(req: NextRequest) {
       console.log("[parse-url] Gemini extracted:", JSON.stringify(parsed, null, 2));
     } catch (err) {
       const message = err instanceof Error ? err.message : "AI parsing failed";
-      return NextResponse.json({ error: message }, { status: 500 });
+      const status = err instanceof GeminiRequestError ? err.statusCode : 500;
+      return NextResponse.json({ error: message }, { status });
     }
 
     // Quick sanity check — if every field is null, the parse essentially failed

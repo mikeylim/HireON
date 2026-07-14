@@ -1,5 +1,9 @@
 import axios from "axios";
-import { getGeminiGenerateContentUrl } from "@/lib/gemini/config";
+import {
+  GEMINI_REQUEST_TIMEOUT_MS,
+  getGeminiGenerateContentUrl,
+  getGeminiGenerationDefaults,
+} from "@/lib/gemini/config";
 
 // Sends a batch of jobs to Gemini and gets back relevance scores (0-100).
 // We batch them into a single prompt to minimize API calls.
@@ -60,16 +64,20 @@ Every job must have an entry. Keep reasons under 15 words.`;
 
   try {
     const geminiUrl = getGeminiGenerateContentUrl();
+    const generationDefaults = getGeminiGenerationDefaults();
     const { data } = await axios.post(
-      `${geminiUrl}?key=${apiKey}`,
+      geminiUrl,
       {
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
-          temperature: 0.1, // low randomness for consistent scoring
+          ...generationDefaults,
           maxOutputTokens: 4096,
         },
       },
-      { timeout: 30000 }
+      {
+        headers: { "x-goog-api-key": apiKey },
+        timeout: GEMINI_REQUEST_TIMEOUT_MS,
+      }
     );
 
     const text =

@@ -1,5 +1,9 @@
 import axios from "axios";
-import { getGeminiGenerateContentUrl } from "@/lib/gemini/config";
+import {
+  GEMINI_REQUEST_TIMEOUT_MS,
+  getGeminiGenerateContentUrl,
+  getGeminiGenerationDefaults,
+} from "@/lib/gemini/config";
 
 // What we extract from a job posting URL — every field is nullable so Gemini
 // can return null when uncertain instead of hallucinating
@@ -19,6 +23,102 @@ export interface ParsedJob {
   notes: string | null;          // application tips, required docs, contact info, etc.
 }
 
+interface GeminiProviderError {
+  error?: {
+    status?: string;
+    message?: string;
+  };
+}
+
+export class GeminiRequestError extends Error {
+  constructor(
+    message: string,
+    public readonly statusCode: number
+  ) {
+    super(message);
+    this.name = "GeminiRequestError";
+  }
+}
+
+function mapGeminiRequestError(err: unknown): GeminiRequestError {
+  if (!axios.isAxiosError<GeminiProviderError>(err)) {
+    console.error("[gemini:parse] unexpected failure:", err instanceof Error ? err.message : err);
+    return new GeminiRequestError("AI parsing failed unexpectedly. Please try again.", 500);
+  }
+
+  const httpStatus = err.response?.status;
+  const providerStatus = err.response?.data?.error?.status;
+  const providerMessage = err.response?.data?.error?.message
+    ?.replace(/AIza[\w-]+/g, "[redacted]")
+    .slice(0, 300);
+
+  // Log only diagnostic metadata. Never log the Axios request config because
+  // its headers contain the Gemini API key and its body contains posting text.
+  console.error("[gemini:parse] request failed", {
+    httpStatus,
+    axiosCode: err.code,
+    providerStatus,
+    providerMessage,
+  });
+
+  if (
+    err.code === "ECONNABORTED" ||
+    err.code === "ETIMEDOUT" ||
+    /timeout/i.test(err.message)
+  ) {
+    return new GeminiRequestError(
+      "Gemini took too long to respond. Please try again with a shorter job description.",
+      504
+    );
+  }
+
+  if (httpStatus === 400) {
+    if (/api key/i.test(providerMessage ?? "")) {
+      return new GeminiRequestError(
+        "Gemini rejected the API key. Check GEMINI_API_KEY and restart the server.",
+        502
+      );
+    }
+    return new GeminiRequestError(
+      "Gemini rejected the request configuration. Check the selected model and generation settings.",
+      502
+    );
+  }
+
+  if (httpStatus === 401 || httpStatus === 403) {
+    return new GeminiRequestError(
+      "Gemini API access was denied. Check the API key restrictions and Google project access.",
+      502
+    );
+  }
+
+  if (httpStatus === 404) {
+    return new GeminiRequestError(
+      "Gemini model not found. Check GEMINI_MODEL.",
+      502
+    );
+  }
+
+  if (httpStatus === 429) {
+    return new GeminiRequestError(
+      "Gemini rate limit or quota was reached. Try again later.",
+      429
+    );
+  }
+
+  if (httpStatus && httpStatus >= 500) {
+    return new GeminiRequestError(
+      "Gemini is temporarily unavailable. Please try again shortly.",
+      503
+    );
+  }
+
+  return new GeminiRequestError(
+    "Couldn't connect to Gemini. Check your network and try again.",
+    502
+  );
+}
+
 // Send page content to Gemini and get structured job fields back
 export async function parseJobFromContent(
   pageContent: string,
@@ -27,14 +127,15 @@ export async function parseJobFromContent(
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY is not configured");
   const geminiUrl = getGeminiGenerateContentUrl();
+  const generationDefaults = getGeminiGenerationDefaults();
 
   // Truncate to keep within token budget. 12000 chars (~3000 tokens) gives
   // enough room to capture metadata that often appears below the main description
   // (salary, deadline, application instructions) on corporate career sites.
   const trimmed = pageContent.substring(0, 12000);
 
-  // The prompt design is the most important part of preventing hallucinations.
-  // Three guardrails: strict schema, explicit null instruction, low temperature.
+  // The prompt design is the most important part of preventing hallucinations:
+  // use a strict schema, explicit null instructions, and minimal model thinking.
   const prompt = `You are a job posting parser. Extract structured information from the job posting content below.
 
 CRITICAL RULES — read carefully:
@@ -86,36 +187,23 @@ ${trimmed}`;
   let data;
   try {
     const response = await axios.post(
-      `${geminiUrl}?key=${apiKey}`,
+      geminiUrl,
       {
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
-          temperature: 0.05, // very low — we want deterministic extraction
+          ...generationDefaults,
           maxOutputTokens: 4096, // generous budget for thinking models that reserve tokens
           responseMimeType: "application/json",
-          // Disable internal "thinking" for this task — we just need structured copying,
-          // not reasoning. This avoids the thinking tokens eating into the output budget.
-          thinkingConfig: { thinkingBudget: 0 },
         },
       },
-      { timeout: 30000 }
+      {
+        headers: { "x-goog-api-key": apiKey },
+        timeout: GEMINI_REQUEST_TIMEOUT_MS,
+      }
     );
     data = response.data;
   } catch (err) {
-    // Surface a friendlier message instead of axios's raw "Request failed with status code X"
-    if (axios.isAxiosError(err)) {
-      const status = err.response?.status;
-      if (status === 401 || status === 403) {
-        throw new Error("Gemini API key is invalid. Check GEMINI_API_KEY.");
-      }
-      if (status === 429) {
-        throw new Error("Gemini rate limit hit. Try again in a minute.");
-      }
-      if (status === 404) {
-        throw new Error("Gemini model not found. The model name may be wrong.");
-      }
-    }
-    throw new Error("Couldn't reach AI service. Please try again.");
+    throw mapGeminiRequestError(err);
   }
 
   const candidate = data?.candidates?.[0];
@@ -227,18 +315,21 @@ Raw text:
 
   try {
     const geminiUrl = getGeminiGenerateContentUrl();
+    const generationDefaults = getGeminiGenerationDefaults();
     const response = await axios.post(
-      `${geminiUrl}?key=${apiKey}`,
+      geminiUrl,
       {
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
-          temperature: 0.1,
+          ...generationDefaults,
           maxOutputTokens: 2048,
           responseMimeType: "application/json",
-          thinkingConfig: { thinkingBudget: 0 },
         },
       },
-      { timeout: 30000 }
+      {
+        headers: { "x-goog-api-key": apiKey },
+        timeout: GEMINI_REQUEST_TIMEOUT_MS,
+      }
     );
 
     const text: string = response.data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
@@ -256,7 +347,8 @@ Raw text:
   } catch (err) {
     // Enhancement is best-effort — if Gemini fails, return nulls and let the
     // adapter's original description stand
-    console.error("[enhanceDescriptionAndNotes] failed:", err instanceof Error ? err.message : err);
+    const mappedError = mapGeminiRequestError(err);
+    console.error("[enhanceDescriptionAndNotes] failed:", mappedError.message);
     return { description: null, notes: null };
   }
 }
