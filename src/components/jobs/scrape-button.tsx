@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Loader2, Zap } from "lucide-react";
-import { loadSettings } from "@/lib/settings";
+import { DEFAULT_SETTINGS, loadSettings } from "@/lib/settings";
 import type { PreviewJob } from "@/lib/types/preview";
 
 const ALL_SOURCES = [
@@ -22,6 +22,7 @@ export function ScrapeButton({ onResults }: ScrapeButtonProps) {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [keywords, setKeywords] = useState("");
+  const [location, setLocation] = useState(DEFAULT_SETTINGS.defaultLocation);
   const [sources, setSources] = useState<string[]>(
     ALL_SOURCES.map((s) => s.id)
   );
@@ -30,6 +31,11 @@ export function ScrapeButton({ onResults }: ScrapeButtonProps) {
   useEffect(() => {
     const settings = loadSettings();
     if (settings.defaultKeywords) setKeywords(settings.defaultKeywords);
+    const configuredLocation =
+      typeof settings.defaultLocation === "string"
+        ? settings.defaultLocation.trim()
+        : "";
+    setLocation(configuredLocation || DEFAULT_SETTINGS.defaultLocation);
     if (settings.defaultSources.length > 0) setSources(settings.defaultSources);
   }, []);
 
@@ -57,7 +63,7 @@ export function ScrapeButton({ onResults }: ScrapeButtonProps) {
             .split(",")
             .map((k) => k.trim())
             .filter(Boolean),
-          location: "Toronto, ON",
+          location,
           sources,
         }),
       });

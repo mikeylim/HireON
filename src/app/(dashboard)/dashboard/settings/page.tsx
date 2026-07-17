@@ -216,6 +216,9 @@ export default function SettingsPage() {
               placeholder="e.g. Toronto, ON"
               className={inputClass}
             />
+            <p className="mt-1 text-xs text-[var(--muted)]">
+              Used as the location whenever you search for jobs.
+            </p>
           </div>
         </div>
 
