@@ -9,10 +9,11 @@ export interface AppSettings {
 }
 
 const STORAGE_KEY = "hireon-settings";
+export const DEFAULT_SEARCH_LOCATION = "Toronto, ON";
 
 export const DEFAULT_SETTINGS: AppSettings = {
   defaultKeywords: "",
-  defaultLocation: "Toronto, ON",
+  defaultLocation: DEFAULT_SEARCH_LOCATION,
   geminiContext:
     "junior developer looking for full-stack, frontend, or software developer roles in Toronto/GTA/Ontario",
   scoreThreshold: 40,

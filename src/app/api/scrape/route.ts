@@ -3,6 +3,8 @@ import { fetchJobBankFeed } from "@/lib/scraper/jobbank";
 import { fetchAdzunaJobs } from "@/lib/scraper/adzuna";
 import { fetchJoobleJobs } from "@/lib/scraper/jooble";
 import { fetchRemotiveJobs } from "@/lib/scraper/remotive";
+import { DEFAULT_SEARCH_LOCATION } from "@/lib/settings";
+import { matchesSearchLocation } from "@/lib/location";
 import type { Job } from "@/lib/types/job";
 
 const SOURCES = ["jobbank", "adzuna", "jooble", "remotive"] as const;
@@ -16,8 +18,17 @@ export async function POST(req: NextRequest) {
     // Scraping is read-only — allow guests to try it
     const body = await req.json();
     const keywords: string[] = body.keywords ?? ["developer"];
-    const location: string = body.location ?? "Toronto, ON";
+    const requestedLocation =
+      typeof body.location === "string" ? body.location.trim() : "";
+    const location = requestedLocation || DEFAULT_SEARCH_LOCATION;
     const sources: Source[] = body.sources ?? [...SOURCES];
+
+    if (location.length > 100) {
+      return NextResponse.json(
+        { data: [], error: "Location must be 100 characters or fewer." },
+        { status: 400 }
+      );
+    }
 
     const scrapePromises: Promise<Partial<Job>[]>[] = [];
 
@@ -70,7 +81,7 @@ export async function POST(req: NextRequest) {
     const normalized = jobs.map((job) => ({
       title: job.title ?? "Untitled",
       company: job.company ?? "Unknown",
-      location: job.location ?? location,
+      location: job.location?.trim() ?? "",
       url: job.url ?? "",
       source: job.source ?? "unknown",
       salary_min: job.salary_min ?? null,
@@ -83,9 +94,16 @@ export async function POST(req: NextRequest) {
       relevance_score: null as number | null,
     }));
 
+    // Provider location parameters are often ranking hints rather than strict
+    // filters. Enforce the user's requested city/region before deduplication.
+    const locationMatched = normalized.filter((job) =>
+      matchesSearchLocation(job.location, location, job.work_mode)
+    );
+    const filteredOutCount = normalized.length - locationMatched.length;
+
     const preview: typeof normalized = [];
 
-    for (const job of normalized) {
+    for (const job of locationMatched) {
       if (!job.url || seenUrls.has(job.url)) continue;
       seenUrls.add(job.url);
 
@@ -118,7 +136,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       data: preview,
       error: null,
-      message: `Found ${preview.length} jobs from ${sources.join(", ")}.`,
+      filteredOutCount,
+      message: `Found ${preview.length} jobs for ${location} from ${sources.join(", ")}.`,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

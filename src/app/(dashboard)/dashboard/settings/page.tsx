@@ -217,7 +217,8 @@ export default function SettingsPage() {
               className={inputClass}
             />
             <p className="mt-1 text-xs text-[var(--muted)]">
-              Used as the location whenever you search for jobs.
+              Pre-fills All Jobs searches. You can override it for one search
+              without changing this default.
             </p>
           </div>
         </div>
