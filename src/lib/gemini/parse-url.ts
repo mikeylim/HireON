@@ -1,9 +1,5 @@
 import axios from "axios";
-import {
-  GEMINI_REQUEST_TIMEOUT_MS,
-  getGeminiGenerateContentUrl,
-  getGeminiGenerationDefaults,
-} from "@/lib/gemini/config";
+import { generateGeminiContent } from "@/lib/gemini/request";
 
 // What we extract from a job posting URL — every field is nullable so Gemini
 // can return null when uncertain instead of hallucinating
@@ -124,10 +120,9 @@ export async function parseJobFromContent(
   pageContent: string,
   sourceUrl: string
 ): Promise<ParsedJob> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("GEMINI_API_KEY is not configured");
-  const geminiUrl = getGeminiGenerateContentUrl();
-  const generationDefaults = getGeminiGenerationDefaults();
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error("GEMINI_API_KEY is not configured");
+  }
 
   // Truncate to keep within token budget. 12000 chars (~3000 tokens) gives
   // enough room to capture metadata that often appears below the main description
@@ -186,22 +181,13 @@ ${trimmed}`;
 
   let data;
   try {
-    const response = await axios.post(
-      geminiUrl,
-      {
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          ...generationDefaults,
-          maxOutputTokens: 4096, // generous budget for thinking models that reserve tokens
-          responseMimeType: "application/json",
-        },
+    data = await generateGeminiContent({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        maxOutputTokens: 4096, // generous budget for thinking models that reserve tokens
+        responseMimeType: "application/json",
       },
-      {
-        headers: { "x-goog-api-key": apiKey },
-        timeout: GEMINI_REQUEST_TIMEOUT_MS,
-      }
-    );
-    data = response.data;
+    });
   } catch (err) {
     throw mapGeminiRequestError(err);
   }
@@ -314,25 +300,15 @@ Raw text:
   ${trimmed}`;
 
   try {
-    const geminiUrl = getGeminiGenerateContentUrl();
-    const generationDefaults = getGeminiGenerationDefaults();
-    const response = await axios.post(
-      geminiUrl,
-      {
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          ...generationDefaults,
-          maxOutputTokens: 2048,
-          responseMimeType: "application/json",
-        },
+    const data = await generateGeminiContent({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        maxOutputTokens: 2048,
+        responseMimeType: "application/json",
       },
-      {
-        headers: { "x-goog-api-key": apiKey },
-        timeout: GEMINI_REQUEST_TIMEOUT_MS,
-      }
-    );
+    });
 
-    const text: string = response.data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+    const text: string = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
     const stripped = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
     const parsed = JSON.parse(stripped);
 

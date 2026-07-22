@@ -3,8 +3,12 @@ const GEMINI_API_BASE =
 
 export const GEMINI_REQUEST_TIMEOUT_MS = 60_000;
 
-function getGeminiModel(): string {
-  const model = process.env.GEMINI_MODEL?.trim();
+type GeminiModelEnvironment = Readonly<Record<string, string | undefined>>;
+
+function getGeminiModel(
+  env: GeminiModelEnvironment = process.env
+): string {
+  const model = env.GEMINI_MODEL?.trim();
 
   if (!model) {
     throw new Error("GEMINI_MODEL is not configured");
@@ -13,19 +17,32 @@ function getGeminiModel(): string {
   return model;
 }
 
-export function getGeminiGenerateContentUrl(): string {
-  const model = getGeminiModel();
+export function getGeminiModelCandidates(
+  env: GeminiModelEnvironment = process.env
+): string[] {
+  const primaryModel = getGeminiModel(env);
+  const fallbackModel = env.GEMINI_FALLBACK_MODEL?.trim();
 
+  if (!fallbackModel || fallbackModel === primaryModel) {
+    return [primaryModel];
+  }
+
+  return [primaryModel, fallbackModel];
+}
+
+export function getGeminiGenerateContentUrl(
+  model = getGeminiModel()
+): string {
   return `${GEMINI_API_BASE}/${encodeURIComponent(model)}:generateContent`;
 }
 
-export function getGeminiGenerationDefaults(): {
+export function getGeminiGenerationDefaults(
+  model = getGeminiModel()
+): {
   thinkingConfig?:
     | { thinkingLevel: "minimal" }
     | { thinkingBudget: 0 };
 } {
-  const model = getGeminiModel();
-
   // Gemini 3 models use named thinking levels. Minimal keeps structured
   // extraction and scoring responsive without relying on legacy token budgets.
   if (/^gemini-3(?:[.-]|$)/.test(model)) {
